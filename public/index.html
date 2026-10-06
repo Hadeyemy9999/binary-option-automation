@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ApexSignals - Binary Options Automation & Real-Time Alerts</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- Top Navigation -->
+  <header>
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+        <polyline points="16 7 22 7 22 13"></polyline>
+      </svg>
+      <span>ApexSignals</span>
+      <span class="brand-badge">Automated M5</span>
+    </div>
+
+    <div class="nav-right">
+      <div class="status-pill">
+        <span id="connection-status-dot" class="status-indicator"></span>
+        <span id="connection-status-text">Engine Online</span>
+      </div>
+
+      <div id="auth-nav-buttons" style="display: flex; gap: 0.5rem;">
+        <button id="btn-open-login" class="btn btn-outline btn-sm">Log In</button>
+        <button id="btn-open-register" class="btn btn-primary btn-sm">Register</button>
+      </div>
+
+      <div id="user-nav-section" style="display: none; align-items: center; gap: 0.75rem;">
+        <span id="nav-user-email" style="font-size: 0.85rem; font-weight: 500;"></span>
+        <span id="user-badge-tier" class="brand-badge">FREE</span>
+        <button id="btn-logout" class="btn btn-outline btn-sm">Log Out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Dashboard -->
+  <main class="container">
+
+    <!-- KPI Summary Grid -->
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-label">Win Rate (30D)</div>
+        <div class="stat-value" style="color: var(--call-green);">84.6%</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Signals Today</div>
+        <div class="stat-value">28</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Avg. Signal Latency</div>
+        <div class="stat-value" style="color: var(--primary);">&lt; 120ms</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Active Timeframe</div>
+        <div class="stat-value">M5 Expiry</div>
+      </div>
+    </div>
+
+    <div class="grid-main">
+      
+      <!-- Left Column: Live Signals Stream -->
+      <section class="card">
+        <div class="card-title">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>Live Signal Broadcast Feed</span>
+            <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.2); color: var(--primary); padding: 0.15rem 0.5rem; border-radius: 4px;">Real-Time</span>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="playSignalChime(true)">🔊 Test Sound</button>
+        </div>
+
+        <div id="signals-list" class="signal-list">
+          <!-- Populated dynamically via app.js -->
+        </div>
+      </section>
+
+      <!-- Right Column: Channels & Profile -->
+      <aside style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- Channels Activation -->
+        <div class="card">
+          <div class="card-title">Notification Channels</div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Receive sub-second alerts right when high-probability setups trigger.
+          </p>
+
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: #151d2f; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+              <div>
+                <strong style="display: block; font-size: 0.9rem;">📱 Telegram Bot</strong>
+                <span id="profile-telegram" style="font-size: 0.75rem; color: var(--text-muted);">Instant Channel DMs</span>
+              </div>
+              <button id="btn-setup-telegram" class="btn btn-primary btn-sm">Connect</button>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: #151d2f; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+              <div>
+                <strong style="display: block; font-size: 0.9rem;">💬 SMS Text Alerts</strong>
+                <span id="phone-status-badge" style="font-size: 0.75rem; color: var(--text-muted);">Pending Setup</span>
+              </div>
+              <button id="btn-setup-sms" class="btn btn-outline btn-sm">Verify</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Strategy Parameters -->
+        <div class="card">
+          <div class="card-title">Strategy Rules</div>
+          <ul style="font-size: 0.85rem; color: var(--text-muted); list-style: none; display: flex; flex-direction: column; gap: 0.5rem;">
+            <li>• <strong>RSI (14)</strong>: CALL &lt; 25 | PUT &gt; 75</li>
+            <li>• <strong>Bollinger Bands (20, 2)</strong>: Touch & Rejection</li>
+            <li>• <strong>News Filter</strong>: Active (30m cooldown around CPI/NFP)</li>
+            <li>• <strong>Execution Window</strong>: Next 5-Minute Candle</li>
+          </ul>
+        </div>
+
+      </aside>
+
+    </div>
+  </main>
+
+  <!-- Auth Modal (Login / Register) -->
+  <div id="auth-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="auth-modal-title" class="modal-title">Sign In / Register</h3>
+        <button class="close-btn" onclick="closeModal('auth-modal')">&times;</button>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.25rem;">
+        <input type="checkbox" id="auth-mode-toggle" style="accent-color: var(--primary);">
+        <label for="auth-mode-toggle" style="font-size: 0.85rem; cursor: pointer;">I want to create a new account (Register)</label>
+      </div>
+
+      <form id="auth-form">
+        <div id="register-fields" class="form-group" style="display: none;">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="auth-name" class="form-input" placeholder="Alex Trader">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="auth-email" class="form-input" required placeholder="name@domain.com">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="auth-password" class="form-input" required placeholder="••••••••">
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">Continue</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- SMS Verification Modal -->
+  <div id="sms-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">SMS Alerts Setup</h3>
+        <button class="close-btn" onclick="closeModal('sms-modal')">&times;</button>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Enter your mobile number to receive instant SMS notifications when new signals trigger.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">Phone Number (with Country Code)</label>
+        <div style="display: flex; gap: 0.5rem;">
+          <input type="tel" id="sms-phone-input" class="form-input" placeholder="+1234567890">
+          <button id="sms-request-otp-btn" class="btn btn-outline" type="button">Send OTP</button>
+        </div>
+      </div>
+
+      <div id="sms-step-2" class="form-group" style="display: none; margin-top: 1rem;">
+        <label class="form-label">6-Digit OTP Code</label>
+        <input type="text" id="sms-otp-input" class="form-input" placeholder="123456">
+        <button id="sms-verify-otp-btn" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem;">Verify & Enable SMS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Telegram Link Modal -->
+  <div id="telegram-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Link Telegram Bot</h3>
+        <button class="close-btn" onclick="closeModal('telegram-modal')">&times;</button>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Click the link below or send the start command to connect your account to our official Telegram broadcast bot:
+      </p>
+
+      <div style="background: #0b0f19; padding: 1rem; border-radius: 0.5rem; word-break: break-all; margin-bottom: 1rem; border: 1px solid var(--border-color);">
+        <a id="telegram-link-url" href="#" target="_blank" style="color: var(--primary); text-decoration: none; font-size: 0.85rem;">
+          <span id="telegram-link-text">https://t.me/BinarySignalsBot?start=...</span>
+        </a>
+      </div>
+
+      <button class="btn btn-outline" style="width: 100%;" onclick="closeModal('telegram-modal')">Done</button>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById('auth-mode-toggle').addEventListener('change', (e) => {
+      document.getElementById('register-fields').style.display = e.target.checked ? 'block' : 'none';
+      document.getElementById('auth-modal-title').innerText = e.target.checked ? 'Create Account' : 'Sign In';
+    });
+  </script>
+</body>
+</html>
