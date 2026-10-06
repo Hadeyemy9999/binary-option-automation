@@ -1,0 +1,8 @@
+{
+  "name": "apexsignals-web",
+  "version": "1.0.0",
+  "description": "ApexSignals Binary Options Platform",
+  "scripts": {
+    "build": "echo 'Static build ready'"
+  }
+}
