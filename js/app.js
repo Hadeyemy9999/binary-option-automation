@@ -1,25 +1,106 @@
-// Professional Trading Terminal Application State & API Management
+// Coordinated Trading Terminal Logic, Strategy Engine, and Trade Journal System
 const API_BASE = window.location.origin.includes('5000') 
   ? window.location.origin + '/api/v1' 
   : (window.location.hostname === 'localhost' ? 'http://localhost:5000/api/v1' : '/api/v1');
 
-let currentUser = null;
-let accessToken = localStorage.getItem('access_token') || null;
-let refreshToken = localStorage.getItem('refresh_token') || null;
-let socket = null;
-let currentFilter = 'ALL';
-let allSignals = [];
+let currentUser = JSON.parse(localStorage.getItem('user_profile') || 'null') || {
+  id: 'usr_default',
+  email: 'trader@apexsignals.io',
+  role: 'USER',
+  tier: 'PRO'
+};
 
-// Fallback high-probability demo dataset for static Vercel views when local server is detached
-const fallbackSignals = [
-  { id: 'sig_101', pair: 'EUR/USD', direction: 'CALL', timeframe: '5M', expiry_minutes: 5, entry_price: 1.08540, status: 'WIN', confidence: 89, created_at: new Date(Date.now() - 3 * 60000).toISOString() },
-  { id: 'sig_102', pair: 'GBP/USD', direction: 'PUT', timeframe: '5M', expiry_minutes: 5, entry_price: 1.29815, status: 'WIN', confidence: 84, created_at: new Date(Date.now() - 12 * 60000).toISOString() },
-  { id: 'sig_103', pair: 'USD/JPY', direction: 'CALL', timeframe: '5M', expiry_minutes: 5, entry_price: 151.420, status: 'ACTIVE', confidence: 92, created_at: new Date(Date.now() - 1 * 60000).toISOString() },
-  { id: 'sig_104', pair: 'BTC/USDT', direction: 'CALL', timeframe: '5M', expiry_minutes: 5, entry_price: 64280.50, status: 'WIN', confidence: 87, created_at: new Date(Date.now() - 28 * 60000).toISOString() },
-  { id: 'sig_105', pair: 'AUD/USD', direction: 'PUT', timeframe: '5M', expiry_minutes: 5, entry_price: 0.67230, status: 'WIN', confidence: 81, created_at: new Date(Date.now() - 45 * 60000).toISOString() }
+let currentStrategy = 'RSI_BB';
+let activePair = 'EUR/USD';
+
+// Strategy Catalog Definitions
+const STRATEGIES = {
+  RSI_BB: {
+    name: 'Strategy A: RSI Extremes + Bollinger Bands (M5)',
+    desc: '• <strong>Conditions</strong>: RSI < 25 (CALL) or RSI > 75 (PUT) at outer band touch.<br>• <strong>Filter</strong>: Automated high-impact news suppression enabled.'
+  },
+  EMA_TREND: {
+    name: 'Strategy B: EMA 9/21 Dynamic Trend Pullback (M5)',
+    desc: '• <strong>Conditions</strong>: Trend established on EMA 50; pullback touch of EMA 9 with rejection candle.<br>• <strong>Filter</strong>: Minimum 2-candle momentum confirmation.'
+  },
+  STOCH_DIVERGENCE: {
+    name: 'Strategy C: Stochastic Momentum Divergence (M5)',
+    desc: '• <strong>Conditions</strong>: Price makes higher high / lower low while Stochastic oscillator makes opposite movement.<br>• <strong>Filter</strong>: Overbought/oversold crossover confirmation.'
+  },
+  INSTITUTIONAL_SR: {
+    name: 'Strategy D: Institutional Key Level S/R (M5)',
+    desc: '• <strong>Conditions</strong>: Rejection wick at 4H horizontal support/resistance or round numbers (.000, .500).<br>• <strong>Filter</strong>: Minimum 3 touches on historical timeframe.'
+  }
+};
+
+// Signals State (Current is [0], older are [1..n])
+let signalsData = [
+  {
+    id: 'sig_101',
+    pair: 'EUR/USD',
+    direction: 'CALL',
+    strategy: 'Strategy A: RSI Extremes + Bollinger Bands (M5)',
+    expiry: 5,
+    entry_price: 1.08542,
+    confidence: 89,
+    timestamp: new Date().toLocaleTimeString(),
+    journal: null // not recorded yet
+  },
+  {
+    id: 'sig_102',
+    pair: 'GBP/USD',
+    direction: 'PUT',
+    strategy: 'Strategy A: RSI Extremes + Bollinger Bands (M5)',
+    expiry: 5,
+    entry_price: 1.29815,
+    confidence: 84,
+    timestamp: new Date(Date.now() - 6 * 60000).toLocaleTimeString(),
+    journal: {
+      tookTrade: true,
+      won: true,
+      followedRules: true,
+      feedback: 'Entered smoothly at candle open, solid ITM win.'
+    }
+  },
+  {
+    id: 'sig_103',
+    pair: 'USD/JPY',
+    direction: 'CALL',
+    strategy: 'Strategy B: EMA 9/21 Dynamic Trend Pullback (M5)',
+    expiry: 5,
+    entry_price: 151.420,
+    confidence: 81,
+    timestamp: new Date(Date.now() - 15 * 60000).toLocaleTimeString(),
+    journal: {
+      tookTrade: false,
+      won: null,
+      followedRules: null,
+      feedback: 'Was away from screen when alert sounded.'
+    }
+  },
+  {
+    id: 'sig_104',
+    pair: 'BTC/USDT',
+    direction: 'PUT',
+    strategy: 'Strategy A: RSI Extremes + Bollinger Bands (M5)',
+    expiry: 5,
+    entry_price: 64510.00,
+    confidence: 88,
+    timestamp: new Date(Date.now() - 25 * 60000).toLocaleTimeString(),
+    journal: {
+      tookTrade: true,
+      won: false,
+      followedRules: false,
+      feedback: 'Entered 45 seconds late after price dropped 30 pips; chased the trade.'
+    }
+  }
 ];
 
-// Audio Notification Synthesizer (Zero-dependency Web Audio API)
+// Active Journaling Workflow State
+let currentJournalingSignal = null;
+let journalTempData = {};
+
+// Synthesizer Audio Chime
 function playSignalChime(isCall = true) {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -32,7 +113,7 @@ function playSignalChime(isCall = true) {
     osc.frequency.setValueAtTime(isCall ? 587.33 : 440.00, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(isCall ? 880 : 330, ctx.currentTime + 0.35);
 
-    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
 
     osc.connect(gain);
@@ -40,9 +121,7 @@ function playSignalChime(isCall = true) {
 
     osc.start();
     osc.stop(ctx.currentTime + 0.4);
-  } catch (e) {
-    console.log('Audio chime not available:', e);
-  }
+  } catch(e) {}
 }
 
 // Toast System
@@ -60,249 +139,309 @@ function showToast(message, type = 'info') {
   }, 4000);
 }
 
-// Tab Switching
-function switchTab(tabName) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+// Navigation Tabs
+function setupNavigation() {
+  const tabTerminal = document.getElementById('nav-terminal');
+  const tabJournal = document.getElementById('nav-journal');
+  const viewTerminal = document.getElementById('view-terminal');
+  const viewJournal = document.getElementById('view-journal');
 
-  const targetTab = document.getElementById(`tab-${tabName}`);
-  const targetBtn = document.getElementById(`nav-${tabName}`);
-  if (targetTab) targetTab.classList.add('active');
-  if (targetBtn) targetBtn.classList.add('active');
+  tabTerminal.onclick = () => {
+    tabTerminal.classList.add('active');
+    tabJournal.classList.remove('active');
+    viewTerminal.classList.add('active');
+    viewJournal.classList.remove('active');
+  };
+
+  tabJournal.onclick = () => {
+    tabJournal.classList.add('active');
+    tabTerminal.classList.remove('active');
+    viewJournal.classList.add('active');
+    viewTerminal.classList.remove('active');
+    renderJournalTable();
+  };
 }
 
-// User Profile & Authentication
-async function checkAuth() {
-  const savedUser = localStorage.getItem('user_profile');
-  if (savedUser) {
-    try {
-      currentUser = JSON.parse(savedUser);
-      updateAuthUI(currentUser);
-    } catch(e) {}
-  }
-
-  if (!accessToken) {
-    updateAuthUI(null);
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      currentUser = data.data.user;
-      localStorage.setItem('user_profile', JSON.stringify(currentUser));
-      updateAuthUI(currentUser);
-    } else if (refreshToken) {
-      await refreshAuthToken();
-    } else {
-      clearSession();
-    }
-  } catch (err) {
-    console.warn('API endpoint unreachable; using saved profile state if active.');
+// Strategy Selector
+function onStrategyChange(strategyKey) {
+  currentStrategy = strategyKey;
+  const strat = STRATEGIES[strategyKey];
+  if (strat) {
+    document.getElementById('strategy-description').innerHTML = strat.desc;
+    showToast(`Active Strategy updated: ${strat.name}`, 'info');
   }
 }
 
-async function refreshAuthToken() {
-  try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken })
-    });
+// Market Tracker Chart Switcher
+function switchChartPair(pairName, tvSymbol) {
+  activePair = pairName;
+  document.querySelectorAll('.pair-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.innerText === pairName);
+  });
+  document.getElementById('active-pair-badge').innerText = `${pairName} • M5`;
 
-    if (res.ok) {
-      const data = await res.json();
-      accessToken = data.data.access_token;
-      refreshToken = data.data.refresh_token;
-      localStorage.setItem('access_token', accessToken);
-      localStorage.setItem('refresh_token', refreshToken);
-      await checkAuth();
-    } else {
-      clearSession();
-    }
-  } catch (err) {
-    // If running decoupled, retain local demo credentials
-  }
+  const widgetUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_7918a&symbol=${encodeURIComponent(tvSymbol)}&interval=5&hidesidetoolbar=1&symboledit=1&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=localhost`;
+  document.getElementById('tradingview-widget').src = widgetUrl;
+  showToast(`Market Tracker loaded: ${pairName}`, 'info');
 }
 
-function updateAuthUI(user) {
-  const userSection = document.getElementById('user-nav-section');
-  const authButtons = document.getElementById('auth-nav-buttons');
-
-  if (user) {
-    userSection.style.display = 'flex';
-    authButtons.style.display = 'none';
-    document.getElementById('nav-user-email').innerText = user.email;
-    document.getElementById('user-badge-tier').innerText = user.tier || 'FREE';
-
-    // Account settings page fields
-    const accountEmail = document.getElementById('account-email');
-    if (accountEmail) accountEmail.innerText = user.email;
-    const accountTier = document.getElementById('account-tier');
-    if (accountTier) accountTier.innerText = user.tier || 'FREE';
-    const accountPhone = document.getElementById('account-phone');
-    if (accountPhone) accountPhone.innerText = user.phone_number || 'Not connected';
-    const accountTelegram = document.getElementById('account-telegram');
-    if (accountTelegram) accountTelegram.innerText = user.telegram_username ? `@${user.telegram_username}` : 'Not linked';
-
-    // Update phone badge
-    const badge = document.getElementById('phone-status-badge');
-    if (badge) {
-      badge.innerHTML = user.phone_verified 
-        ? '<span style="color:var(--call-green); font-weight:700;">✓ Active (SMS Alerts Enabled)</span>' 
-        : '<span style="color:var(--accent-gold); font-weight:600;">Pending Verification</span>';
-    }
-  } else {
-    userSection.style.display = 'none';
-    authButtons.style.display = 'flex';
-  }
-}
-
-function clearSession() {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('user_profile');
-  accessToken = null;
-  refreshToken = null;
-  currentUser = null;
-  updateAuthUI(null);
-}
-
-function logout() {
-  if (refreshToken) {
-    fetch(`${API_BASE}/auth/logout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken })
-    }).catch(() => {});
-  }
-  clearSession();
-  showToast('Logged out successfully', 'info');
-}
-
-// Signals Fetching and Rendering
-async function loadSignals() {
-  try {
-    const res = await fetch(`${API_BASE}/signals?limit=30`);
-    if (res.ok) {
-      const json = await res.json();
-      allSignals = json.data && json.data.length > 0 ? json.data : fallbackSignals;
-    } else {
-      allSignals = fallbackSignals;
-    }
-  } catch (e) {
-    allSignals = fallbackSignals;
-  }
-  renderSignals();
-  updateAnalytics();
-}
-
+// RENDER SIGNALS IN SIGNAL BOX (First = Blue, Others = Gray)
 function renderSignals() {
-  const listEl = document.getElementById('signals-list');
+  const listEl = document.getElementById('signal-box-list');
   if (!listEl) return;
   listEl.innerHTML = '';
 
-  const filtered = allSignals.filter(s => {
-    if (currentFilter === 'CALL') return s.direction === 'CALL';
-    if (currentFilter === 'PUT') return s.direction === 'PUT';
-    if (currentFilter === 'WIN') return s.status === 'WIN';
-    return true;
+  signalsData.forEach((sig, index) => {
+    const isCurrent = index === 0;
+    const isCall = sig.direction === 'CALL';
+    const card = document.createElement('div');
+    card.className = `signal-item ${isCurrent ? 'current' : 'historical'}`;
+
+    const statusLabel = isCurrent 
+      ? `<span class="signal-status-label">CURRENT ACTIVE</span>` 
+      : `<span class="signal-status-label">PAST M5</span>`;
+
+    const journalButtonText = sig.journal ? '✓ Journaled' : '📝 Record in Journal';
+    const journalBtnStyle = sig.journal 
+      ? 'background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981;' 
+      : 'background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid #3b82f6;';
+
+    card.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 0.85rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <strong class="signal-pair-text" style="font-size: 1.05rem;">${sig.pair}</strong>
+            <span class="${isCall ? 'badge-call' : 'badge-put'}">${sig.direction}</span>
+            ${statusLabel}
+          </div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem;">
+            Entry: <strong style="color: #fff;">${sig.entry_price}</strong> | Expiry: <strong>${sig.expiry}M</strong> | Conf: <strong>${sig.confidence}%</strong>
+          </div>
+          <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">
+            ${sig.strategy} • ${sig.timestamp}
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem;">
+        <button class="btn btn-sm" style="${journalBtnStyle} font-size: 0.75rem; padding: 0.3rem 0.6rem;" onclick="openJournalForSignal('${sig.id}')">
+          ${journalButtonText}
+        </button>
+      </div>
+    `;
+
+    listEl.appendChild(card);
   });
-
-  if (filtered.length === 0) {
-    listEl.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-muted);">No signals match current filter.</div>`;
-    return;
-  }
-
-  filtered.forEach(s => listEl.appendChild(createSignalCard(s)));
 }
 
-function createSignalCard(sig) {
-  const card = document.createElement('div');
-  card.className = 'signal-card';
-  const isCall = sig.direction === 'CALL';
+// SIMULATE NEW SIGNAL PRINT (Pushes new signal to top in Blue, old ones turn Gray)
+function triggerSimulatedSignal() {
+  const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'AUD/USD'];
+  const directions = ['CALL', 'PUT'];
+  const prices = {
+    'EUR/USD': (1.08500 + Math.random() * 0.002).toFixed(5),
+    'GBP/USD': (1.29800 + Math.random() * 0.002).toFixed(5),
+    'USD/JPY': (151.300 + Math.random() * 0.4).toFixed(3),
+    'BTC/USDT': (64200 + Math.random() * 500).toFixed(2),
+    'AUD/USD': (0.67200 + Math.random() * 0.001).toFixed(5)
+  };
 
-  let statusBadge = `<span class="badge-active">ACTIVE (M${sig.expiry_minutes || 5})</span>`;
-  if (sig.status === 'WIN') statusBadge = `<span class="badge-win">✅ WIN (+85%)</span>`;
-  if (sig.status === 'LOSS') statusBadge = `<span class="badge-loss">❌ LOSS</span>`;
+  const selectedPair = pairs[Math.floor(Math.random() * pairs.length)];
+  const selectedDirection = directions[Math.floor(Math.random() * directions.length)];
+  const selectedPrice = prices[selectedPair];
+  const confidence = Math.floor(82 + Math.random() * 12);
 
-  card.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 1rem;">
-      <div class="signal-pair">
-        <span>${sig.pair}</span>
-        <span class="${isCall ? 'badge-call' : 'badge-put'}">${sig.direction}</span>
-      </div>
-      <div style="font-size: 0.85rem; color: var(--text-muted);">
-        Expiry: <strong>${sig.expiry_minutes || 5}M</strong> | Entry: <strong style="color:#fff;">${sig.entry_price}</strong>
-      </div>
-    </div>
-    <div style="display: flex; align-items: center; gap: 1.25rem;">
-      <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">AI Confidence: ${sig.confidence || 85}%</span>
-      ${statusBadge}
-    </div>
-  `;
-  return card;
+  const stratName = STRATEGIES[currentStrategy] ? STRATEGIES[currentStrategy].name : 'Active Strategy';
+
+  const newSignal = {
+    id: 'sig_' + Math.floor(Math.random() * 10000),
+    pair: selectedPair,
+    direction: selectedDirection,
+    strategy: stratName,
+    expiry: 5,
+    entry_price: selectedPrice,
+    confidence: confidence,
+    timestamp: new Date().toLocaleTimeString(),
+    journal: null
+  };
+
+  // Add to front (becomes CURRENT in Blue, all others become Gray)
+  signalsData.unshift(newSignal);
+  renderSignals();
+  renderJournalTable();
+  playSignalChime(selectedDirection === 'CALL');
+  showToast(`🚨 New Signal Printed: ${selectedPair} ${selectedDirection} (Current: Blue)`, 'success');
 }
 
-function updateAnalytics() {
-  const total = allSignals.length;
-  const wins = allSignals.filter(s => s.status === 'WIN').length;
-  const rate = total > 0 ? ((wins / (total || 1)) * 100).toFixed(1) : 84.6;
+// TRADE JOURNAL QUESTION WORKFLOW
+function openJournalForSignal(signalId) {
+  const signal = signalsData.find(s => s.id === signalId);
+  if (!signal) return;
+  currentJournalingSignal = signal;
+  journalTempData = {};
 
-  const rateEl = document.getElementById('kpi-win-rate');
-  if (rateEl) rateEl.innerText = `${rate}%`;
-  const countEl = document.getElementById('kpi-signal-count');
-  if (countEl) countEl.innerText = total.toString();
+  document.getElementById('modal-signal-info').innerText = `${signal.pair} ${signal.direction} @ ${signal.entry_price} (${signal.timestamp})`;
+
+  // Reset steps to Question 1
+  document.querySelectorAll('.journal-step').forEach(step => step.classList.remove('active'));
+  document.getElementById('journal-q1').classList.add('active');
+  document.getElementById('feedback-reason-input').value = '';
+
+  openModal('journal-modal');
 }
 
-// WebSocket Live Signals Feed
-function initSignalsWebSocket() {
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsHost = window.location.origin.includes('5000') 
-    ? window.location.host 
-    : (window.location.hostname === 'localhost' ? 'localhost:5000' : null);
+// Question 1: Did you take a trade on the signal?
+function handleJournalQ1(tookTrade) {
+  journalTempData.tookTrade = tookTrade;
 
-  if (!wsHost) {
-    document.getElementById('connection-status-dot').className = 'status-indicator';
-    document.getElementById('connection-status-text').innerText = 'Cloud Signals Active';
-    return;
-  }
-
-  try {
-    socket = new WebSocket(`${wsProtocol}//${wsHost}/ws/signals`);
-
-    socket.onopen = () => {
-      document.getElementById('connection-status-dot').className = 'status-indicator';
-      document.getElementById('connection-status-text').innerText = 'Engine Stream Online';
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'NEW_SIGNAL') {
-          allSignals.unshift(data.signal);
-          renderSignals();
-          playSignalChime(data.signal.direction === 'CALL');
-          showToast(`🚨 New Signal: ${data.signal.pair} ${data.signal.direction}`, 'success');
-        }
-      } catch(e) {}
-    };
-
-    socket.onclose = () => {
-      document.getElementById('connection-status-dot').className = 'status-indicator offline';
-      document.getElementById('connection-status-text').innerText = 'Connecting Feed...';
-      setTimeout(initSignalsWebSocket, 4000);
-    };
-  } catch (err) {
-    console.log('WebSocket stream idle');
+  if (!tookTrade) {
+    // If NO: turns to GRAY color on journal page
+    finishJournalRecord({
+      tookTrade: false,
+      won: null,
+      followedRules: null,
+      feedback: 'Trade was skipped.'
+    });
+  } else {
+    // If YES: proceed to Question 2 (Did the trade win?)
+    document.getElementById('journal-q1').classList.remove('active');
+    document.getElementById('journal-q2').classList.add('active');
   }
 }
 
-// Modal System
+// Question 2: Did the trade win?
+function handleJournalQ2(won) {
+  journalTempData.won = won;
+
+  if (won) {
+    // If YES: turns to GREEN
+    finishJournalRecord({
+      tookTrade: true,
+      won: true,
+      followedRules: true,
+      feedback: 'Trade won (ITM) with positive outcome.'
+    });
+  } else {
+    // If NO: proceed to Question 3 (Did you follow according to signal parameters?)
+    document.getElementById('journal-q2').classList.remove('active');
+    document.getElementById('journal-q3').classList.add('active');
+  }
+}
+
+// Question 3: Did you follow according to parameters?
+function handleJournalQ3(followedRules) {
+  journalTempData.followedRules = followedRules;
+
+  if (followedRules) {
+    // If YES (loss, but followed rules 100%): leave it at GREEN (Disciplined execution)
+    finishJournalRecord({
+      tookTrade: true,
+      won: false,
+      followedRules: true,
+      feedback: 'Disciplined execution: followed all signal parameters strictly.'
+    });
+  } else {
+    // If NO: proceed to Question 4 (Input honest feedback -> turns to YELLOW)
+    document.getElementById('journal-q3').classList.remove('active');
+    document.getElementById('journal-q4').classList.add('active');
+  }
+}
+
+// Question 4: Save honest feedback input
+function submitFeedbackReason() {
+  const reason = document.getElementById('feedback-reason-input').value.trim();
+  const feedback = reason || 'Trader did not adhere to standard signal rules or parameters.';
+
+  // If NO: turn to YELLOW with honest feedback box
+  finishJournalRecord({
+    tookTrade: true,
+    won: false,
+    followedRules: false,
+    feedback: feedback
+  });
+}
+
+function finishJournalRecord(journalData) {
+  if (currentJournalingSignal) {
+    currentJournalingSignal.journal = journalData;
+    renderSignals();
+    renderJournalTable();
+    closeModal('journal-modal');
+
+    if (!journalData.tookTrade) {
+      showToast('Trade recorded as Skipped (Marked Gray in Journal)', 'info');
+    } else if (journalData.won || journalData.followedRules) {
+      showToast('Trade recorded as Disciplined Execution (Marked Green in Journal)', 'success');
+    } else {
+      showToast('Feedback logged: Rule deviation (Marked Yellow in Journal)', 'warning');
+    }
+  }
+}
+
+// RENDER JOURNAL TABLE WITH EXACT COLOR RULES
+function renderJournalTable() {
+  const tbody = document.getElementById('journal-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  signalsData.forEach(sig => {
+    const row = document.createElement('tr');
+    row.className = 'journal-row';
+
+    let colorClass = '';
+    let tradeTakenCell = '<span style="color: var(--text-muted);">Unrecorded</span>';
+    let outcomeCell = '<span style="color: var(--text-muted);">-</span>';
+    let feedbackCell = '<span style="color: var(--text-muted);">-</span>';
+
+    if (sig.journal) {
+      if (!sig.journal.tookTrade) {
+        // Did you take trade? NO -> GRAY COLOR
+        colorClass = 'status-gray';
+        tradeTakenCell = '<span class="journal-badge badge-skipped">No (Skipped)</span>';
+        outcomeCell = '<span style="color: #94a3b8;">N/A (Skipped)</span>';
+        feedbackCell = `<em>${sig.journal.feedback || 'Skipped'}</em>`;
+      } else if (sig.journal.won) {
+        // Trade won? YES -> GREEN COLOR
+        colorClass = 'status-green';
+        tradeTakenCell = '<strong style="color: var(--call-green);">Yes</strong>';
+        outcomeCell = '<span class="journal-badge badge-disciplined-win">Won (ITM) • Green</span>';
+        feedbackCell = `<span style="color: #a7f3d0;">${sig.journal.feedback}</span>`;
+      } else if (sig.journal.followedRules) {
+        // Trade lost, but followed rules? YES -> GREEN COLOR
+        colorClass = 'status-green';
+        tradeTakenCell = '<strong style="color: var(--call-green);">Yes</strong>';
+        outcomeCell = '<span class="journal-badge badge-disciplined-loss">Disciplined Loss • Green</span>';
+        feedbackCell = `<span style="color: #a7f3d0;">Followed rules 100%</span>`;
+      } else {
+        // Trade lost AND did not follow rules? NO -> YELLOW COLOR with honest feedback
+        colorClass = 'status-yellow';
+        tradeTakenCell = '<strong style="color: var(--accent-gold);">Yes</strong>';
+        outcomeCell = '<span class="journal-badge badge-deviated">Rule Deviation • Yellow</span>';
+        feedbackCell = `<strong style="color: #fde68a;">Feedback:</strong> "${sig.journal.feedback}"`;
+      }
+    }
+
+    row.className = `journal-row ${colorClass}`;
+
+    row.innerHTML = `
+      <td><strong>${sig.timestamp}</strong></td>
+      <td><strong>${sig.pair}</strong> <span class="${sig.direction === 'CALL' ? 'badge-call' : 'badge-put'}">${sig.direction}</span></td>
+      <td style="font-size: 0.8rem; color: #94a3b8;">${sig.strategy}</td>
+      <td>${sig.entry_price}</td>
+      <td>${tradeTakenCell}</td>
+      <td>${outcomeCell}</td>
+      <td style="max-width: 280px; font-size: 0.82rem;">${feedbackCell}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="openJournalForSignal('${sig.id}')">
+          ${sig.journal ? 'Edit' : 'Record'}
+        </button>
+      </td>
+    `;
+
+    tbody.appendChild(row);
+  });
+}
+
+// Modal Utility
 function openModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.add('active');
@@ -313,154 +452,44 @@ function closeModal(id) {
   if (el) el.classList.remove('active');
 }
 
-// DOM Setup
-document.addEventListener('DOMContentLoaded', () => {
-  checkAuth();
-  loadSignals();
-  initSignalsWebSocket();
+// Auth Handlers
+function setupAuthHandlers() {
+  const user = currentUser;
+  if (user) {
+    document.getElementById('nav-user-email').innerText = user.email || 'trader@apexsignals.io';
+    document.getElementById('user-nav-section').style.display = 'flex';
+    document.getElementById('auth-nav-buttons').style.display = 'none';
+  }
 
-  // Navigation Tabs
-  document.getElementById('nav-dashboard').onclick = () => switchTab('dashboard');
-  document.getElementById('nav-analytics').onclick = () => switchTab('analytics');
-  document.getElementById('nav-settings').onclick = () => switchTab('settings');
-
-  // Filter Buttons
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentFilter = btn.dataset.filter;
-      renderSignals();
-    };
-  });
-
-  // Auth Modal Buttons
-  document.getElementById('btn-open-login').onclick = () => {
-    document.getElementById('auth-mode-toggle').checked = false;
-    document.getElementById('register-fields').style.display = 'none';
-    document.getElementById('auth-modal-title').innerText = 'Sign In to Terminal';
+  document.getElementById('btn-logout').onclick = () => {
     openModal('auth-modal');
   };
 
-  document.getElementById('btn-open-register').onclick = () => {
-    document.getElementById('auth-mode-toggle').checked = true;
-    document.getElementById('register-fields').style.display = 'block';
-    document.getElementById('auth-modal-title').innerText = 'Create Trader Account';
-    openModal('auth-modal');
-  };
-
-  document.getElementById('btn-logout').onclick = logout;
-
-  // SMS & Telegram Modal Buttons
-  document.getElementById('btn-setup-sms').onclick = () => {
-    if (!currentUser) return openModal('auth-modal');
-    openModal('sms-modal');
-  };
-
-  document.getElementById('btn-setup-telegram').onclick = async () => {
-    if (!currentUser) return openModal('auth-modal');
-    try {
-      const res = await fetch(`${API_BASE}/auth/telegram/link`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        document.getElementById('telegram-link-url').href = data.data.deep_link;
-        document.getElementById('telegram-link-text').innerText = data.data.deep_link;
-        openModal('telegram-modal');
-      }
-    } catch(e) {
-      // Demo deep link
-      document.getElementById('telegram-link-url').href = 'https://t.me/ApexBinarySignalsBot?start=demo';
-      document.getElementById('telegram-link-text').innerText = 'https://t.me/ApexBinarySignalsBot?start=demo';
-      openModal('telegram-modal');
-    }
-  };
-
-  // Auth Form Submission
-  document.getElementById('auth-form').onsubmit = async (e) => {
+  document.getElementById('auth-form').onsubmit = (e) => {
     e.preventDefault();
-    const isRegister = document.getElementById('auth-mode-toggle').checked;
     const email = document.getElementById('auth-email').value;
-    const password = document.getElementById('auth-password').value;
-    const fullName = document.getElementById('auth-name').value;
-
-    const payload = isRegister ? { email, password, full_name: fullName } : { email, password };
-    const endpoint = isRegister ? `${API_BASE}/auth/register` : `${API_BASE}/auth/login`;
-
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json();
-
-      if (json.success) {
-        accessToken = json.data.tokens.access_token;
-        refreshToken = json.data.tokens.refresh_token;
-        currentUser = json.data.user;
-        localStorage.setItem('access_token', accessToken);
-        localStorage.setItem('refresh_token', refreshToken);
-        localStorage.setItem('user_profile', JSON.stringify(currentUser));
-        updateAuthUI(currentUser);
-        closeModal('auth-modal');
-        showToast(isRegister ? 'Account created! Welcome.' : 'Signed in successfully.', 'success');
-      } else {
-        showToast(json.message || 'Authentication error', 'error');
-      }
-    } catch (err) {
-      // Local fallback simulator when API is not running on same origin
-      currentUser = {
-        id: 'usr_local_' + Math.random().toString(36).substring(7),
-        email: email,
-        full_name: fullName || 'Active Trader',
-        role: 'USER',
-        tier: 'PRO',
-        phone_verified: true,
-      };
-      localStorage.setItem('user_profile', JSON.stringify(currentUser));
-      updateAuthUI(currentUser);
-      closeModal('auth-modal');
-      showToast('Signed in successfully (Profile Active)', 'success');
-    }
+    const name = document.getElementById('auth-name').value;
+    currentUser = {
+      id: 'usr_' + Math.random().toString(36).substring(7),
+      email: email,
+      full_name: name || 'Active Trader',
+      role: 'USER',
+      tier: 'PRO'
+    };
+    localStorage.setItem('user_profile', JSON.stringify(currentUser));
+    document.getElementById('nav-user-email').innerText = email;
+    closeModal('auth-modal');
+    showToast(`Welcome ${email}! Entering terminal workspace.`, 'success');
   };
+}
 
-  // SMS Verification Form
-  document.getElementById('sms-request-otp-btn').onclick = async () => {
-    const phone = document.getElementById('sms-phone-input').value;
-    if (!phone) return showToast('Please enter your phone number', 'error');
+// DOM Ready initialization
+document.addEventListener('DOMContentLoaded', () => {
+  setupNavigation();
+  setupAuthHandlers();
+  renderSignals();
+  renderJournalTable();
 
-    try {
-      const res = await fetch(`${API_BASE}/auth/phone/send-otp`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({ phone_number: phone })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`OTP sent! ${data.dev_otp ? `(Code: ${data.dev_otp})` : ''}`, 'success');
-        document.getElementById('sms-step-2').style.display = 'block';
-      }
-    } catch(e) {
-      showToast('OTP sent! (Demo Code: 482910)', 'success');
-      document.getElementById('sms-step-2').style.display = 'block';
-    }
-  };
-
-  document.getElementById('sms-verify-otp-btn').onclick = async () => {
-    const code = document.getElementById('sms-otp-input').value;
-    if (currentUser) {
-      currentUser.phone_verified = true;
-      currentUser.phone_number = document.getElementById('sms-phone-input').value;
-      localStorage.setItem('user_profile', JSON.stringify(currentUser));
-      updateAuthUI(currentUser);
-    }
-    closeModal('sms-modal');
-    showToast('Phone verified! SMS signal alerts active.', 'success');
-  };
+  // Strategy default description
+  document.getElementById('strategy-description').innerHTML = STRATEGIES['RSI_BB'].desc;
 });
