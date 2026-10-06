@@ -3,26 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ApexSignals - Binary Options Automation & Real-Time Alerts</title>
+  <title>ApexSignals - Institutional Binary Options & Automated Signal Platform</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-  <!-- Top Navigation -->
+  <!-- Top Navigation Bar -->
   <header>
-    <div class="brand">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
-        <polyline points="16 7 22 7 22 13"></polyline>
-      </svg>
-      <span>ApexSignals</span>
-      <span class="brand-badge">Automated M5</span>
+    <div style="display: flex; align-items: center; gap: 2rem;">
+      <a href="/" class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+          <polyline points="16 7 22 7 22 13"></polyline>
+        </svg>
+        <span>ApexSignals</span>
+        <span class="brand-badge">PRO ENGINE</span>
+      </a>
+
+      <!-- Main Navigation Tabs -->
+      <nav class="nav-links">
+        <button id="nav-dashboard" class="nav-btn active">Live Terminal</button>
+        <button id="nav-analytics" class="nav-btn">Performance Analytics</button>
+        <button id="nav-settings" class="nav-btn">Trader Settings</button>
+      </nav>
     </div>
 
     <div class="nav-right">
       <div class="status-pill">
         <span id="connection-status-dot" class="status-indicator"></span>
-        <span id="connection-status-text">Engine Online</span>
+        <span id="connection-status-text">Signal Stream Active</span>
       </div>
 
       <div id="auth-nav-buttons" style="display: flex; gap: 0.5rem;">
@@ -31,103 +40,192 @@
       </div>
 
       <div id="user-nav-section" style="display: none; align-items: center; gap: 0.75rem;">
-        <span id="nav-user-email" style="font-size: 0.85rem; font-weight: 500;"></span>
-        <span id="user-badge-tier" class="brand-badge">FREE</span>
-        <button id="btn-logout" class="btn btn-outline btn-sm">Log Out</button>
+        <span id="nav-user-email" style="font-size: 0.85rem; font-weight: 600; color: #fff;"></span>
+        <span id="user-badge-tier" class="brand-badge">PRO</span>
+        <button id="btn-logout" class="btn btn-outline btn-sm">Sign Out</button>
       </div>
     </div>
   </header>
 
-  <!-- Main Content Dashboard -->
+  <!-- Main Container -->
   <main class="container">
 
-    <!-- KPI Summary Grid -->
-    <div class="stats-grid">
-      <div class="stat-box">
-        <div class="stat-label">Win Rate (30D)</div>
-        <div class="stat-value" style="color: var(--call-green);">84.6%</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Signals Today</div>
-        <div class="stat-value">28</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Avg. Signal Latency</div>
-        <div class="stat-value" style="color: var(--primary);">&lt; 120ms</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Active Timeframe</div>
-        <div class="stat-value">M5 Expiry</div>
-      </div>
-    </div>
+    <!-- TAB 1: LIVE DASHBOARD -->
+    <div id="tab-dashboard" class="tab-content active">
 
-    <div class="grid-main">
-      
-      <!-- Left Column: Live Signals Stream -->
-      <section class="card">
-        <div class="card-title">
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span>Live Signal Broadcast Feed</span>
-            <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.2); color: var(--primary); padding: 0.15rem 0.5rem; border-radius: 4px;">Real-Time</span>
-          </div>
-          <button class="btn btn-outline btn-sm" onclick="playSignalChime(true)">🔊 Test Sound</button>
+      <!-- KPI Summary Cards -->
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-label">Win Rate (30-Day Verified)</div>
+          <div id="kpi-win-rate" class="stat-value" style="color: var(--call-green);">86.4%</div>
         </div>
-
-        <div id="signals-list" class="signal-list">
-          <!-- Populated dynamically via app.js -->
+        <div class="stat-box">
+          <div class="stat-label">Signals Generated Today</div>
+          <div id="kpi-signal-count" class="stat-value">34</div>
         </div>
-      </section>
+        <div class="stat-box">
+          <div class="stat-label">Average Execution Latency</div>
+          <div class="stat-value" style="color: var(--primary);">&lt; 95ms</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Current Trading Session</div>
+          <div class="stat-value" style="color: var(--accent-gold);">London / NY Overlap</div>
+        </div>
+      </div>
 
-      <!-- Right Column: Channels & Profile -->
-      <aside style="display: flex; flex-direction: column; gap: 1.5rem;">
+      <div class="grid-dashboard">
         
-        <!-- Channels Activation -->
-        <div class="card">
-          <div class="card-title">Notification Channels</div>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-            Receive sub-second alerts right when high-probability setups trigger.
-          </p>
-
-          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: #151d2f; border-radius: 0.5rem; border: 1px solid var(--border-color);">
-              <div>
-                <strong style="display: block; font-size: 0.9rem;">📱 Telegram Bot</strong>
-                <span id="profile-telegram" style="font-size: 0.75rem; color: var(--text-muted);">Instant Channel DMs</span>
-              </div>
-              <button id="btn-setup-telegram" class="btn btn-primary btn-sm">Connect</button>
+        <!-- Signals Broadcast Feed -->
+        <section class="card">
+          <div class="card-title">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span>High-Probability Signal Feed</span>
+              <span style="font-size: 0.75rem; background: var(--primary-light); color: var(--primary); padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700;">LIVE M5</span>
             </div>
+            <button class="btn btn-outline btn-sm" onclick="playSignalChime(true)">🔊 Test Alert Sound</button>
+          </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: #151d2f; border-radius: 0.5rem; border: 1px solid var(--border-color);">
-              <div>
-                <strong style="display: block; font-size: 0.9rem;">💬 SMS Text Alerts</strong>
-                <span id="phone-status-badge" style="font-size: 0.75rem; color: var(--text-muted);">Pending Setup</span>
+          <!-- Filter Navigation -->
+          <div class="signal-filter-bar">
+            <button class="filter-btn active" data-filter="ALL">All Signals</button>
+            <button class="filter-btn" data-filter="CALL">🟢 CALL Only</button>
+            <button class="filter-btn" data-filter="PUT">🔴 PUT Only</button>
+            <button class="filter-btn" data-filter="WIN">🏆 ITM / Wins</button>
+          </div>
+
+          <div id="signals-list" class="signal-list">
+            <!-- Rendered by app.js -->
+          </div>
+        </section>
+
+        <!-- Right Side: Channel Linking & Active Filters -->
+        <aside>
+          <!-- Notification Dispatch Channels -->
+          <div class="card">
+            <div class="card-title">Dispatch Channels</div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.15rem; line-height: 1.4;">
+              Sub-second automated dispatch alerts direct to your phone or Telegram before the entry candle closes.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem; background: #0c111e; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                <div>
+                  <strong style="display: block; font-size: 0.9rem;">📱 Telegram Bot</strong>
+                  <span id="account-telegram" style="font-size: 0.75rem; color: var(--text-muted);">Instant Channel DMs</span>
+                </div>
+                <button id="btn-setup-telegram" class="btn btn-primary btn-sm">Connect</button>
               </div>
-              <button id="btn-setup-sms" class="btn btn-outline btn-sm">Verify</button>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem; background: #0c111e; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                <div>
+                  <strong style="display: block; font-size: 0.9rem;">💬 SMS Text Alerts</strong>
+                  <span id="phone-status-badge" style="font-size: 0.75rem; color: var(--text-muted);">Requires Verification</span>
+                </div>
+                <button id="btn-setup-sms" class="btn btn-outline btn-sm">Configure</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Strategy Engine Filters -->
+          <div class="card">
+            <div class="card-title">Engine Filters Active</div>
+            <ul style="font-size: 0.85rem; color: var(--text-muted); list-style: none; display: flex; flex-direction: column; gap: 0.65rem;">
+              <li style="display: flex; justify-content: space-between;">
+                <span>RSI Period:</span> <strong style="color: #fff;">14 (25/75 Extreme)</strong>
+              </li>
+              <li style="display: flex; justify-content: space-between;">
+                <span>Bollinger Band Deviation:</span> <strong style="color: #fff;">2.0 (20 Period)</strong>
+              </li>
+              <li style="display: flex; justify-content: space-between;">
+                <span>Economic News Filter:</span> <strong style="color: var(--call-green);">Enabled (Red Folders Blocked)</strong>
+              </li>
+              <li style="display: flex; justify-content: space-between;">
+                <span>Signal Expiry Time:</span> <strong style="color: #fff;">5-Minute Expiry (M5)</strong>
+              </li>
+            </ul>
+          </div>
+        </aside>
+
+      </div>
+    </div>
+
+    <!-- TAB 2: ANALYTICS & WIN-RATE TRACKER -->
+    <div id="tab-analytics" class="tab-content">
+      <div class="card">
+        <div class="card-title">30-Day Historical Accuracy Breakdown</div>
+        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+          Real-time performance audit of binary options signals categorized by asset class and market sessions.
+        </p>
+
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">Forex Majors (EUR/USD, GBP/USD)</div>
+            <div class="stat-value" style="color: var(--call-green);">88.2% Win Rate</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Crypto Spot (BTC/USDT, ETH/USDT)</div>
+            <div class="stat-value" style="color: var(--call-green);">82.5% Win Rate</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Consecutive Winning Streaks</div>
+            <div class="stat-value">9 Trades</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Profit Factor</div>
+            <div class="stat-value" style="color: var(--primary);">2.41</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: TRADER PROFILE SETTINGS -->
+    <div id="tab-settings" class="tab-content">
+      <div class="settings-grid">
+        <div class="card">
+          <div class="card-title">Account Profile</div>
+          <div style="display: flex; flex-direction: column; gap: 1rem; font-size: 0.9rem;">
+            <div>
+              <span style="color: var(--text-muted); display: block; font-size: 0.8rem;">Registered Email</span>
+              <strong id="account-email">trader@example.com</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted); display: block; font-size: 0.8rem;">Membership Level</span>
+              <strong id="account-tier" style="color: var(--call-green);">PRO VIP</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted); display: block; font-size: 0.8rem;">Linked Phone</span>
+              <strong id="account-phone">+1234567890 (Verified)</strong>
             </div>
           </div>
         </div>
 
-        <!-- Strategy Parameters -->
         <div class="card">
-          <div class="card-title">Strategy Rules</div>
-          <ul style="font-size: 0.85rem; color: var(--text-muted); list-style: none; display: flex; flex-direction: column; gap: 0.5rem;">
-            <li>• <strong>RSI (14)</strong>: CALL &lt; 25 | PUT &gt; 75</li>
-            <li>• <strong>Bollinger Bands (20, 2)</strong>: Touch & Rejection</li>
-            <li>• <strong>News Filter</strong>: Active (30m cooldown around CPI/NFP)</li>
-            <li>• <strong>Execution Window</strong>: Next 5-Minute Candle</li>
-          </ul>
+          <div class="card-title">Sound & Alert Preferences</div>
+          <div style="display: flex; flex-direction: column; gap: 1rem; font-size: 0.9rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" checked style="accent-color: var(--primary);">
+              <span>Play audible chime when high-confidence signals trigger</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" checked style="accent-color: var(--primary);">
+              <span>Send high-priority push notification on browser</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" checked style="accent-color: var(--primary);">
+              <span>Receive instant Telegram alerts on channel bot</span>
+            </label>
+          </div>
         </div>
-
-      </aside>
-
+      </div>
     </div>
+
   </main>
 
-  <!-- Auth Modal (Login / Register) -->
+  <!-- Auth Modal (Registration & Login) -->
   <div id="auth-modal" class="modal-overlay">
     <div class="modal">
       <div class="modal-header">
-        <h3 id="auth-modal-title" class="modal-title">Sign In / Register</h3>
+        <h3 id="auth-modal-title" class="modal-title">Sign In to Terminal</h3>
         <button class="close-btn" onclick="closeModal('auth-modal')">&times;</button>
       </div>
 
@@ -139,12 +237,12 @@
       <form id="auth-form">
         <div id="register-fields" class="form-group" style="display: none;">
           <label class="form-label">Full Name</label>
-          <input type="text" id="auth-name" class="form-input" placeholder="Alex Trader">
+          <input type="text" id="auth-name" class="form-input" placeholder="Alex Morgan">
         </div>
 
         <div class="form-group">
           <label class="form-label">Email Address</label>
-          <input type="email" id="auth-email" class="form-input" required placeholder="name@domain.com">
+          <input type="email" id="auth-email" class="form-input" required placeholder="trader@domain.com">
         </div>
 
         <div class="form-group">
@@ -152,24 +250,24 @@
           <input type="password" id="auth-password" class="form-input" required placeholder="••••••••">
         </div>
 
-        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">Continue</button>
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">Authenticate</button>
       </form>
     </div>
   </div>
 
-  <!-- SMS Verification Modal -->
+  <!-- SMS Setup Modal -->
   <div id="sms-modal" class="modal-overlay">
     <div class="modal">
       <div class="modal-header">
-        <h3 class="modal-title">SMS Alerts Setup</h3>
+        <h3 class="modal-title">SMS Signal Dispatch Setup</h3>
         <button class="close-btn" onclick="closeModal('sms-modal')">&times;</button>
       </div>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-        Enter your mobile number to receive instant SMS notifications when new signals trigger.
+        Verify your mobile number to receive instant SMS text alerts when new M5 binary signals fire.
       </p>
 
       <div class="form-group">
-        <label class="form-label">Phone Number (with Country Code)</label>
+        <label class="form-label">Phone Number (International format)</label>
         <div style="display: flex; gap: 0.5rem;">
           <input type="tel" id="sms-phone-input" class="form-input" placeholder="+1234567890">
           <button id="sms-request-otp-btn" class="btn btn-outline" type="button">Send OTP</button>
@@ -192,12 +290,12 @@
         <button class="close-btn" onclick="closeModal('telegram-modal')">&times;</button>
       </div>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-        Click the link below or send the start command to connect your account to our official Telegram broadcast bot:
+        Connect your account to our official Telegram alert bot:
       </p>
 
-      <div style="background: #0b0f19; padding: 1rem; border-radius: 0.5rem; word-break: break-all; margin-bottom: 1rem; border: 1px solid var(--border-color);">
+      <div style="background: var(--bg-input); padding: 1rem; border-radius: 0.5rem; word-break: break-all; margin-bottom: 1.25rem; border: 1px solid var(--border-color);">
         <a id="telegram-link-url" href="#" target="_blank" style="color: var(--primary); text-decoration: none; font-size: 0.85rem;">
-          <span id="telegram-link-text">https://t.me/BinarySignalsBot?start=...</span>
+          <span id="telegram-link-text">https://t.me/ApexBinarySignalsBot?start=...</span>
         </a>
       </div>
 
@@ -211,7 +309,7 @@
   <script>
     document.getElementById('auth-mode-toggle').addEventListener('change', (e) => {
       document.getElementById('register-fields').style.display = e.target.checked ? 'block' : 'none';
-      document.getElementById('auth-modal-title').innerText = e.target.checked ? 'Create Account' : 'Sign In';
+      document.getElementById('auth-modal-title').innerText = e.target.checked ? 'Create Trader Account' : 'Sign In to Terminal';
     });
   </script>
 </body>
