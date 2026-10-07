@@ -176,32 +176,83 @@ function setupNavigation() {
   };
 }
 
-// RUNTIME ENGINE: Configures Chart with EMA 15 (Yellow) and EMA 50 (Blue)
+// RUNTIME ENGINE: Configures Chart with EMA 15 (Yellow) and EMA 50 (Blue) Indicators directly rendered on screen
+let tvWidgetInstance = null;
+
 function updateChartRuntime() {
-  const strat = STRATEGIES[currentStrategy] || STRATEGIES['EMA_CROSS_15_50'];
-  const studiesParam = encodeURIComponent(JSON.stringify(strat.studies));
-  const overridesParam = encodeURIComponent(JSON.stringify(strat.studiesOverrides || {}));
+  const container = document.getElementById('tradingview_chart_container');
+  if (!container) return;
 
-  const widgetUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_7918a` +
-    `&symbol=${encodeURIComponent(activeSymbol)}` +
-    `&interval=${activeTimeframe}` +
-    `&hidesidetoolbar=1` +
-    `&symboledit=1` +
-    `&saveimage=0` +
-    `&toolbarbg=f1f3f6` +
-    `&studies=${studiesParam}` +
-    `&theme=dark` +
-    `&style=1` +
-    `&timezone=Etc%2FUTC` +
-    `&studies_overrides=${overridesParam}` +
-    `&enabled_features=%5B%5D` +
-    `&disabled_features=%5B%5D` +
-    `&locale=en` +
-    `&utm_source=localhost`;
+  // Clear previous instance
+  container.innerHTML = '';
 
-  const chartIframe = document.getElementById('tradingview-widget');
-  if (chartIframe) {
-    chartIframe.src = widgetUrl;
+  // Configured Technical Indicators for TradingView Library:
+  // 1. EMA 15 (Yellow)
+  // 2. EMA 50 (Blue)
+  const studiesList = [
+    {
+      id: "MAExp@tv-basicstudies",
+      version: 60,
+      inputs: {
+        length: 15,
+        source: "close"
+      }
+    },
+    {
+      id: "MASimple@tv-basicstudies",
+      version: 60,
+      inputs: {
+        length: 50,
+        source: "close"
+      }
+    }
+  ];
+
+  const studiesOverrides = {
+    // 15 EMA - Yellow line (#facc15)
+    "moving average exponential.plot.color": "#facc15",
+    "moving average exponential.plot.linewidth": 2,
+    "moving average exponential.ma.color": "#facc15",
+    "moving average exponential.ma.linewidth": 2,
+    
+    // 50 EMA - Blue line (#2563eb)
+    "moving average.plot.color": "#2563eb",
+    "moving average.plot.linewidth": 3,
+    "moving average.ma.color": "#2563eb",
+    "moving average.ma.linewidth": 3
+  };
+
+  if (typeof TradingView !== 'undefined' && TradingView.widget) {
+    try {
+      tvWidgetInstance = new TradingView.widget({
+        autosize: true,
+        symbol: activeSymbol,
+        interval: activeTimeframe,
+        timezone: "Etc/UTC",
+        theme: "dark",
+        style: "1", // Candlesticks
+        locale: "en",
+        toolbar_bg: "#0b0f19",
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        allow_symbol_change: false,
+        container_id: "tradingview_chart_container",
+        studies: studiesList,
+        studies_overrides: studiesOverrides,
+        overrides: {
+          "paneProperties.background": "#0b0f19",
+          "paneProperties.vertGridProperties.color": "#1e293b",
+          "paneProperties.horzGridProperties.color": "#1e293b",
+          "symbolWatermarkProperties.transparency": 90,
+          "scalesProperties.textColor": "#94a3b8"
+        }
+      });
+    } catch(err) {
+      console.warn('TradingView constructor fallback:', err);
+      renderIframeFallback(container, studiesList, studiesOverrides);
+    }
+  } else {
+    renderIframeFallback(container, studiesList, studiesOverrides);
   }
 
   // Update badge UI
@@ -209,7 +260,18 @@ function updateChartRuntime() {
   if (pairBadge) pairBadge.innerText = `${activePair} • ${activeTimeframe}M`;
 
   const indBadge = document.getElementById('active-indicators-badge');
-  if (indBadge) indBadge.innerText = strat.badge;
+  if (indBadge) indBadge.innerText = 'EMA 15 (Yellow) + EMA 50 (Blue)';
+}
+
+function renderIframeFallback(container, studiesList, studiesOverrides) {
+  const studiesParam = encodeURIComponent(JSON.stringify(["MAExp@tv-basicstudies", "MASimple@tv-basicstudies"]));
+  const overridesParam = encodeURIComponent(JSON.stringify(studiesOverrides));
+
+  container.innerHTML = `
+    <iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_7918a&symbol=${encodeURIComponent(activeSymbol)}&interval=${activeTimeframe}&hidesidetoolbar=0&symboledit=0&saveimage=0&toolbarbg=0b0f19&studies=${studiesParam}&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides=${overridesParam}&locale=en&utm_source=localhost"
+            style="width: 100%; height: 100%; border: none;">
+    </iframe>
+  `;
 }
 
 // Strategy Selector Callback
