@@ -68,7 +68,7 @@ let signalsData = [
     expiry: 15, // 15 Min duration
     entry_price: 1.08542,
     confidence: 93,
-    createdAt: Date.now() - 60000, // 1 min ago (Fresh/Current Active)
+    createdAt: Date.now() - 60000, // 1 min ago (Fresh/Current Active < 5m)
     timestamp: new Date(Date.now() - 60000).toLocaleTimeString(),
     decision: null,
     journal: null
@@ -79,17 +79,17 @@ let signalsData = [
     direction: 'SELL',
     strategy: '15 EMA (Yellow) × 50 EMA (Blue) Fresh Crossover',
     timeframe: '1M',
-    expiry: 15,
+    expiry: 15, // 15 Min duration
     entry_price: 1.29815,
     confidence: 88,
-    createdAt: Date.now() - 7 * 60000, // 7 min ago (Running > 5 min)
-    timestamp: new Date(Date.now() - 7 * 60000).toLocaleTimeString(),
+    createdAt: Date.now() - 6 * 60000, // 6 min ago (Trade taken, currently RUNNING - not finished in 15m duration)
+    timestamp: new Date(Date.now() - 6 * 60000).toLocaleTimeString(),
     decision: 'TOOK_TRADE',
     journal: {
       tookTrade: true,
-      won: true,
+      won: null,
       followedRules: true,
-      feedback: 'Waited for 15 EMA to close below 50 EMA on 1M candle; entered 15-minute duration trade, clean ITM win.'
+      feedback: 'Trade running: 15 EMA closed below 50 EMA on 1M; currently progressing in 15-minute duration.'
     }
   },
   {
@@ -101,15 +101,10 @@ let signalsData = [
     expiry: 15,
     entry_price: 151.420,
     confidence: 85,
-    createdAt: Date.now() - 20 * 60000,
-    timestamp: new Date(Date.now() - 20 * 60000).toLocaleTimeString(),
-    decision: 'MISSED',
-    journal: {
-      tookTrade: false,
-      won: null,
-      followedRules: null,
-      feedback: 'Missed signal: was away from screen during the 1M crossover bar.'
-    }
+    createdAt: Date.now() - 8 * 60000, // 8 min ago (Generated > 5 min ago, trade was NOT taken -> SIGNAL EXPIRED)
+    timestamp: new Date(Date.now() - 8 * 60000).toLocaleTimeString(),
+    decision: null,
+    journal: null
   },
   {
     id: 'sig_104',
@@ -120,14 +115,14 @@ let signalsData = [
     expiry: 15,
     entry_price: 64510.00,
     confidence: 91,
-    createdAt: Date.now() - 32 * 60000,
-    timestamp: new Date(Date.now() - 32 * 60000).toLocaleTimeString(),
+    createdAt: Date.now() - 25 * 60000, // 25 min ago (> 15 min duration -> Finished)
+    timestamp: new Date(Date.now() - 25 * 60000).toLocaleTimeString(),
     decision: 'TOOK_TRADE',
     journal: {
       tookTrade: true,
-      won: false,
-      followedRules: false,
-      feedback: 'Failed rule: selected 1-minute expiry instead of the full 15-minute duration.'
+      won: true,
+      followedRules: true,
+      feedback: 'Strict rule adherence: 1M crossover with full 15-minute duration. Closed ITM win.'
     }
   }
 ];
@@ -269,20 +264,43 @@ function updateChartSignalMarker() {
 
   const ageMinutes = Math.floor((Date.now() - (currentSignal.createdAt || Date.now())) / 60000);
   const isBuy = currentSignal.direction === 'BUY' || currentSignal.direction === 'CALL';
+  const duration = currentSignal.expiry || 15;
+  const signArrow = isBuy ? '▲ BUY' : '▼ SELL';
 
-  // Display marker sign on chart if signal is under 15 minutes old
-  if (ageMinutes < 15) {
+  // 1. Trade currently RUNNING (trade was taken and duration not finished)
+  if (currentSignal.decision === 'TOOK_TRADE' && ageMinutes < duration) {
     marker.style.display = 'flex';
     marker.className = `chart-signal-marker ${isBuy ? 'buy' : 'sell'}`;
-    const signArrow = isBuy ? '▲ BUY' : '▼ SELL';
-    const crossLabel = isBuy ? '15 EMA (Yellow) > 50 EMA (Blue)' : '15 EMA (Yellow) < 50 EMA (Blue)';
-
     marker.innerHTML = `
       <span style="font-size: 0.95rem;">${signArrow}</span>
       <span>${currentSignal.pair} @ ${currentSignal.entry_price}</span>
-      <span style="font-size: 0.7rem; opacity: 0.9; font-weight: 600;">[${crossLabel} • 15M Trade]</span>
+      <span style="font-size: 0.72rem; background: rgba(0,0,0,0.55); padding: 0.15rem 0.45rem; border-radius: 4px; color: #a7f3d0; font-weight: 700;">
+        ⚡ RUNNING (${duration - ageMinutes}m left)
+      </span>
     `;
-  } else {
+  }
+  // 2. Fresh Signal Entry Window (< 5 minutes and not skipped)
+  else if (ageMinutes < 5 && currentSignal.decision !== 'MISSED') {
+    marker.style.display = 'flex';
+    marker.className = `chart-signal-marker ${isBuy ? 'buy' : 'sell'}`;
+    const crossLabel = isBuy ? '15 EMA (Yellow) > 50 EMA (Blue)' : '15 EMA (Yellow) < 50 EMA (Blue)';
+    marker.innerHTML = `
+      <span style="font-size: 0.95rem;">${signArrow}</span>
+      <span>${currentSignal.pair} @ ${currentSignal.entry_price}</span>
+      <span style="font-size: 0.7rem; opacity: 0.95; font-weight: 600;">[${crossLabel} • Entry Window: ${5 - ageMinutes}m left]</span>
+    `;
+  }
+  // 3. Signal Expired (> 5 minutes ago and trade was NOT taken)
+  else if (ageMinutes >= 5 && currentSignal.decision !== 'TOOK_TRADE' && ageMinutes < duration) {
+    marker.style.display = 'flex';
+    marker.className = `chart-signal-marker expired`;
+    marker.innerHTML = `
+      <span style="font-size: 0.9rem;">⚠️ SIGNAL EXPIRED</span>
+      <span style="font-size: 0.72rem; font-weight: 600;">${currentSignal.pair} (${ageMinutes}m ago — Entry Closed)</span>
+    `;
+  }
+  // 4. Concluded / Older than duration
+  else {
     marker.style.display = 'none';
   }
 }
@@ -347,41 +365,84 @@ function renderSignals() {
     const isBuy = sig.direction === 'BUY' || sig.direction === 'CALL';
     const ageMs = now - (sig.createdAt || now);
     const ageMinutes = Math.floor(ageMs / 60000);
-    const isRunning = ageMinutes >= 5 && ageMinutes < (sig.expiry || 15);
-    const isExpired = ageMinutes >= (sig.expiry || 15);
+    const duration = sig.expiry || 15;
+
+    // 1. RUNNING: currently running trade (a trade that has not finished in duration)
+    const isRunningTrade = (sig.decision === 'TOOK_TRADE') && (ageMinutes < duration);
+
+    // 2. SIGNAL EXPIRED: generated 5+ mins ago and trade was NOT taken (not advised to take)
+    const isSignalExpired = (sig.decision !== 'TOOK_TRADE') && (ageMinutes >= 5);
+
+    // 3. Trade duration finished
+    const isFinished = ageMinutes >= duration;
 
     const card = document.createElement('div');
     card.className = `signal-item ${isFirst ? 'current' : 'historical'}`;
 
-    // Dynamic Status Label: Fresh Current vs Running vs Past
+    // Dynamic Status Ticker
     let statusLabel = '';
-    if (isFirst && !isRunning && !isExpired) {
-      statusLabel = `<span class="signal-status-label">CURRENT ACTIVE</span>`;
-    } else if (isRunning) {
-      statusLabel = `<span class="signal-status-label running">⚡ RUNNING (${ageMinutes}m in)</span>`;
+    if (isRunningTrade) {
+      const remainingMins = Math.max(1, duration - ageMinutes);
+      statusLabel = `<span class="signal-status-label running">⚡ RUNNING (${remainingMins}m left)</span>`;
+    } else if (isSignalExpired) {
+      statusLabel = `<span class="signal-status-label expired">⚠️ SIGNAL EXPIRED</span>`;
+    } else if (isFinished) {
+      if (sig.decision === 'TOOK_TRADE') {
+        statusLabel = `<span class="signal-status-label completed">FINISHED (${duration}M)</span>`;
+      } else {
+        statusLabel = `<span class="signal-status-label">PAST ${sig.timeframe || '1M'}</span>`;
+      }
     } else {
-      statusLabel = `<span class="signal-status-label">PAST ${sig.timeframe || '1M'}</span>`;
+      // Fresh Signal (< 5 min entry window)
+      const windowRemaining = Math.max(1, 5 - ageMinutes);
+      if (isFirst) {
+        statusLabel = `<span class="signal-status-label">CURRENT ACTIVE (${windowRemaining}m window)</span>`;
+      } else {
+        statusLabel = `<span class="signal-status-label">ACTIVE (${windowRemaining}m left)</span>`;
+      }
     }
 
     const directionBadge = isBuy 
       ? `<span class="badge-call">BUY (15 EMA &gt; 50 EMA)</span>` 
       : `<span class="badge-put">SELL (15 EMA &lt; 50 EMA)</span>`;
 
-    // Interactive Action Buttons (Took Trade vs Missed Signal)
+    // Interactive Action Buttons
     let decisionControls = '';
     if (sig.decision === 'TOOK_TRADE') {
-      decisionControls = `
-        <div style="font-size: 0.75rem; color: var(--call-green); font-weight: 700; margin-top: 0.35rem;">
-          ✓ Trade Executed
-        </div>
-      `;
+      if (isRunningTrade) {
+        decisionControls = `
+          <div style="font-size: 0.75rem; color: #10b981; font-weight: 700; margin-top: 0.35rem;">
+            ⚡ Trade Running (${Math.max(1, duration - ageMinutes)}m left)
+          </div>
+        `;
+      } else {
+        decisionControls = `
+          <div style="font-size: 0.75rem; color: #10b981; font-weight: 700; margin-top: 0.35rem;">
+            ✓ Trade Completed (${duration}m)
+          </div>
+        `;
+      }
     } else if (sig.decision === 'MISSED') {
       decisionControls = `
         <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin-top: 0.35rem;">
           ✕ Signal Missed
         </div>
       `;
+    } else if (isSignalExpired) {
+      // Signal generated >5 min ago - not advised to take signal
+      decisionControls = `
+        <div class="trade-action-btns" style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.2rem;">
+          <div style="font-size: 0.68rem; color: #ef4444; font-weight: 700;">
+            ⛔ Expired (&gt;5m ago) — Not Advised to Take
+          </div>
+          <div style="display: flex; gap: 0.35rem;">
+            <button class="btn-action-miss" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;" onclick="handleSignalDecision('${sig.id}', false)">✕ Mark Missed</button>
+            <button class="btn-action-take" style="opacity: 0.65; padding: 0.2rem 0.5rem; font-size: 0.7rem; background: rgba(239, 68, 68, 0.15); border-color: #ef4444; color: #fca5a5;" onclick="handleLateTradeEntry('${sig.id}')">⚠️ Late Entry</button>
+          </div>
+        </div>
+      `;
     } else {
+      // Fresh (< 5 min)
       decisionControls = `
         <div class="trade-action-btns">
           <button class="btn-action-take" onclick="handleSignalDecision('${sig.id}', true)">✓ Took Trade</button>
@@ -436,7 +497,9 @@ function handleSignalDecision(signalId, tookTrade) {
 
   if (tookTrade) {
     signal.decision = 'TOOK_TRADE';
-    showToast(`Recorded: Took trade on ${signal.pair} (${signal.direction})`, 'success');
+    showToast(`⚡ Trade Initiated: ${signal.pair} (${signal.direction}). Ticker: RUNNING (${signal.expiry}m duration)`, 'success');
+    renderSignals();
+    renderJournalTable();
     openJournalForSignal(signalId);
   } else {
     signal.decision = 'MISSED';
@@ -444,11 +507,27 @@ function handleSignalDecision(signalId, tookTrade) {
       tookTrade: false,
       won: null,
       followedRules: null,
-      feedback: 'Missed signal.'
+      feedback: 'Missed signal / skipped trade execution.'
     };
     showToast(`Marked ${signal.pair} as Missed Signal (Gray in Journal)`, 'info');
     renderSignals();
     renderJournalTable();
+  }
+}
+
+// Caution on Late Entry when signal is expired (> 5 minutes ago)
+function handleLateTradeEntry(signalId) {
+  const signal = signalsData.find(s => s.id === signalId);
+  if (!signal) return;
+
+  const proceed = confirm(`⚠️ CAUTION: SIGNAL EXPIRED\n\nThis signal was generated more than 5 minutes ago.\nAccording to strategy rules, taking a trade after 5 minutes of crossover is NOT advised as momentum may have reversed.\n\nDo you still want to execute this trade anyway?`);
+  if (proceed) {
+    signal.decision = 'TOOK_TRADE';
+    signal.lateEntry = true;
+    showToast(`⚠️ Late trade executed on ${signal.pair}. Rule deviation noted.`, 'warning');
+    renderSignals();
+    renderJournalTable();
+    openJournalForSignal(signalId);
   }
 }
 
@@ -727,8 +806,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('strategy-description').innerHTML = STRATEGIES['EMA_CROSS_15_50'].desc;
   updateChartRuntime();
 
-  // Check every 30 seconds to update signal status (Current -> Running after 5 min)
+  // Check every 10 seconds to update live signal ticker (RUNNING duration, SIGNAL EXPIRED after 5m)
   setInterval(() => {
     renderSignals();
-  }, 30000);
+  }, 10000);
 });

@@ -461,23 +461,62 @@ header {
   white-space: nowrap;
 }
 
-/* RUNNING SIGNAL (AFTER 5 MINUTES) = ORANGE/AMBER */
+/* RUNNING TICKER: TRADE IN PROGRESS (< 15M DURATION) */
 .signal-status-label.running {
-  background-color: #d97706 !important;
+  background: linear-gradient(135deg, #059669, #10b981) !important;
   color: #fff !important;
   font-weight: 800;
-  padding: 0.2rem 0.6rem;
+  padding: 0.22rem 0.65rem;
   border-radius: 4px;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   letter-spacing: 0.05em;
   white-space: nowrap;
-  animation: pulseOrange 2s infinite;
+  animation: pulseRunning 1.8s infinite;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
 }
 
-@keyframes pulseOrange {
-  0% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.7); }
-  70% { box-shadow: 0 0 0 8px rgba(217, 119, 6, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
+@keyframes pulseRunning {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+/* SIGNAL EXPIRED: GENERATED > 5 MINUTES AGO (NOT ADVISED TO ENTER) */
+.signal-status-label.expired {
+  background: linear-gradient(135deg, #dc2626, #ef4444) !important;
+  color: #ffffff !important;
+  font-weight: 800;
+  padding: 0.22rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  animation: pulseExpired 2s infinite;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+@keyframes pulseExpired {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* COMPLETED / FINISHED TICKER */
+.signal-status-label.completed {
+  background-color: #334155 !important;
+  color: #94a3b8 !important;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+}
+
+.chart-signal-marker.expired {
+  background: rgba(185, 28, 28, 0.95);
+  color: #fff;
+  border: 2px solid #ef4444;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+  animation: markerGlowRed 2s infinite;
 }
 
 .trade-action-btns {
