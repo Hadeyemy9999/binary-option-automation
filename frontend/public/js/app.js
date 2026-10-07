@@ -24,17 +24,29 @@ const STRATEGIES = {
     candlesDuration: 4, // 4 candlesticks
     minDuration: 15,    // 15 Minutes trade duration on 5M timeframe
     studies: [
-      'MAExp@tv-basicstudies',
-      'MASimple@tv-basicstudies'
+      {
+        id: "MAExp@tv-basicstudies",
+        version: 60,
+        inputs: { length: 15, source: "close" }
+      },
+      {
+        id: "MASimple@tv-basicstudies",
+        version: 60,
+        inputs: { length: 50, source: "close" }
+      }
     ],
-    // Overrides: EMA 15 in Yellow (#facc15), EMA 50 in Blue (#2563eb)
+    // Overrides: EMA 15 strictly Yellow (#facc15 / #ffeb3b), EMA 50 Blue (#2563eb / #2196f3)
     studiesOverrides: {
-      "moving average exponential.length": 15,
-      "moving average exponential.plot.color": "#facc15",
+      "moving average exponential.plot.color": "#FFEB3B",
       "moving average exponential.plot.linewidth": 2,
-      "moving average.length": 50,
-      "moving average.plot.color": "#2563eb",
-      "moving average.plot.linewidth": 3
+      "moving average exponential.ma.color": "#FFEB3B",
+      "moving average exponential.ma.linewidth": 2,
+      "moving average exponential.color": "#FFEB3B",
+      "moving average.plot.color": "#2196F3",
+      "moving average.plot.linewidth": 3,
+      "moving average.ma.color": "#2196F3",
+      "moving average.ma.linewidth": 3,
+      "moving average.color": "#2196F3"
     },
     desc: '• <strong>Indicator 1</strong>: <span style="color:#60a5fa; font-weight:700;">EMA 50 (Close) - Colour: BLUE</span><br>' +
           '• <strong>Indicator 2</strong>: <span style="color:#facc15; font-weight:700;">EMA 15 (Close) - Colour: YELLOW</span><br>' +
@@ -44,7 +56,7 @@ const STRATEGIES = {
   }
 };
 
-// Initial High-Probability Signals for EMA 15/50 Crossover (4 Candlesticks / 15-Minute Expiry)
+// Initial Signals with explicit created_at epoch timestamps
 let signalsData = [
   {
     id: 'sig_101',
@@ -52,10 +64,12 @@ let signalsData = [
     direction: 'BUY',
     strategy: '15 EMA (Yellow) × 50 EMA (Blue) Crossover',
     timeframe: '5M',
-    expiry: 15, // 15 Min duration (4 candles)
+    expiry: 15,
     entry_price: 1.08542,
     confidence: 92,
-    timestamp: new Date().toLocaleTimeString(),
+    createdAt: Date.now() - 60000, // 1 min ago (Fresh/Current)
+    timestamp: new Date(Date.now() - 60000).toLocaleTimeString(),
+    decision: null, // null, 'TOOK_TRADE', 'MISSED'
     journal: null
   },
   {
@@ -67,12 +81,14 @@ let signalsData = [
     expiry: 15,
     entry_price: 1.29815,
     confidence: 88,
-    timestamp: new Date(Date.now() - 15 * 60000).toLocaleTimeString(),
+    createdAt: Date.now() - 8 * 60000, // 8 min ago (Running > 5 min)
+    timestamp: new Date(Date.now() - 8 * 60000).toLocaleTimeString(),
+    decision: 'TOOK_TRADE',
     journal: {
       tookTrade: true,
       won: true,
       followedRules: true,
-      feedback: 'Waited for 15 EMA to close below 50 EMA on 5M candle; entered 15-minute trade (4 candles), clean win.'
+      feedback: 'Waited for 15 EMA to close below 50 EMA; entered 15-minute trade (4 candles), clean win.'
     }
   },
   {
@@ -84,12 +100,14 @@ let signalsData = [
     expiry: 15,
     entry_price: 151.420,
     confidence: 84,
-    timestamp: new Date(Date.now() - 30 * 60000).toLocaleTimeString(),
+    createdAt: Date.now() - 22 * 60000, // 22 min ago (Past)
+    timestamp: new Date(Date.now() - 22 * 60000).toLocaleTimeString(),
+    decision: 'MISSED',
     journal: {
       tookTrade: false,
       won: null,
       followedRules: null,
-      feedback: 'Skipped trade: missed the initial crossover bar.'
+      feedback: 'Missed signal: was away from screen during crossover.'
     }
   },
   {
@@ -101,7 +119,9 @@ let signalsData = [
     expiry: 15,
     entry_price: 64510.00,
     confidence: 90,
-    timestamp: new Date(Date.now() - 45 * 60000).toLocaleTimeString(),
+    createdAt: Date.now() - 35 * 60000,
+    timestamp: new Date(Date.now() - 35 * 60000).toLocaleTimeString(),
+    decision: 'TOOK_TRADE',
     journal: {
       tookTrade: true,
       won: false,
@@ -186,41 +206,9 @@ function updateChartRuntime() {
   // Clear previous instance
   container.innerHTML = '';
 
-  // Configured Technical Indicators for TradingView Library:
-  // 1. EMA 15 (Yellow)
-  // 2. EMA 50 (Blue)
-  const studiesList = [
-    {
-      id: "MAExp@tv-basicstudies",
-      version: 60,
-      inputs: {
-        length: 15,
-        source: "close"
-      }
-    },
-    {
-      id: "MASimple@tv-basicstudies",
-      version: 60,
-      inputs: {
-        length: 50,
-        source: "close"
-      }
-    }
-  ];
-
-  const studiesOverrides = {
-    // 15 EMA - Yellow line (#facc15)
-    "moving average exponential.plot.color": "#facc15",
-    "moving average exponential.plot.linewidth": 2,
-    "moving average exponential.ma.color": "#facc15",
-    "moving average exponential.ma.linewidth": 2,
-    
-    // 50 EMA - Blue line (#2563eb)
-    "moving average.plot.color": "#2563eb",
-    "moving average.plot.linewidth": 3,
-    "moving average.ma.color": "#2563eb",
-    "moving average.ma.linewidth": 3
-  };
+  const strat = STRATEGIES[currentStrategy] || STRATEGIES['EMA_CROSS_15_50'];
+  const studiesList = strat.studies;
+  const studiesOverrides = strat.studiesOverrides;
 
   if (typeof TradingView !== 'undefined' && TradingView.widget) {
     try {
@@ -249,10 +237,10 @@ function updateChartRuntime() {
       });
     } catch(err) {
       console.warn('TradingView constructor fallback:', err);
-      renderIframeFallback(container, studiesList, studiesOverrides);
+      renderIframeFallback(container, studiesOverrides);
     }
   } else {
-    renderIframeFallback(container, studiesList, studiesOverrides);
+    renderIframeFallback(container, studiesOverrides);
   }
 
   // Update badge UI
@@ -263,7 +251,7 @@ function updateChartRuntime() {
   if (indBadge) indBadge.innerText = 'EMA 15 (Yellow) + EMA 50 (Blue)';
 }
 
-function renderIframeFallback(container, studiesList, studiesOverrides) {
+function renderIframeFallback(container, studiesOverrides) {
   const studiesParam = encodeURIComponent(JSON.stringify(["MAExp@tv-basicstudies", "MASimple@tv-basicstudies"]));
   const overridesParam = encodeURIComponent(JSON.stringify(studiesOverrides));
 
@@ -306,57 +294,122 @@ function switchTimeframe(tf) {
   showToast(`Timeframe set to ${tf}M candle chart`, 'info');
 }
 
-// RENDER SIGNALS IN SIGNAL BOX (First = Blue, Others = Gray)
+// RENDER SIGNALS IN SIGNAL BOX
+// Current signal = Blue. After 5 minutes = Running (Orange). User can choose "Took Trade" or "Missed Signal"
 function renderSignals() {
   const listEl = document.getElementById('signal-box-list');
   if (!listEl) return;
   listEl.innerHTML = '';
 
+  const now = Date.now();
+
   signalsData.forEach((sig, index) => {
-    const isCurrent = index === 0;
+    const isFirst = index === 0;
     const isBuy = sig.direction === 'BUY' || sig.direction === 'CALL';
+    const ageMs = now - (sig.createdAt || now);
+    const ageMinutes = Math.floor(ageMs / 60000);
+    const isRunning = ageMinutes >= 5 && ageMinutes < (sig.expiry || 15);
+    const isExpired = ageMinutes >= (sig.expiry || 15);
+
     const card = document.createElement('div');
-    card.className = `signal-item ${isCurrent ? 'current' : 'historical'}`;
+    card.className = `signal-item ${isFirst ? 'current' : 'historical'}`;
 
-    const statusLabel = isCurrent 
-      ? `<span class="signal-status-label">CURRENT ACTIVE</span>` 
-      : `<span class="signal-status-label">PAST ${sig.timeframe || '5M'}</span>`;
-
-    const journalButtonText = sig.journal ? '✓ Journaled' : '📝 Record in Journal';
-    const journalBtnStyle = sig.journal 
-      ? 'background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981;' 
-      : 'background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid #3b82f6;';
+    // Dynamic Status Label: Fresh Current vs Running vs Past
+    let statusLabel = '';
+    if (isFirst && !isRunning && !isExpired) {
+      statusLabel = `<span class="signal-status-label">CURRENT ACTIVE</span>`;
+    } else if (isRunning) {
+      statusLabel = `<span class="signal-status-label running">⚡ RUNNING (${ageMinutes}m in)</span>`;
+    } else {
+      statusLabel = `<span class="signal-status-label">PAST ${sig.timeframe || '5M'}</span>`;
+    }
 
     const directionBadge = isBuy 
       ? `<span class="badge-call">BUY (15 EMA &gt; 50 EMA)</span>` 
       : `<span class="badge-put">SELL (15 EMA &lt; 50 EMA)</span>`;
 
+    // Interactive Action Buttons (Took Trade vs Missed Signal)
+    let decisionControls = '';
+    if (sig.decision === 'TOOK_TRADE') {
+      decisionControls = `
+        <div style="font-size: 0.75rem; color: var(--call-green); font-weight: 700; margin-top: 0.35rem;">
+          ✓ Trade Executed
+        </div>
+      `;
+    } else if (sig.decision === 'MISSED') {
+      decisionControls = `
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin-top: 0.35rem;">
+          ✕ Signal Missed
+        </div>
+      `;
+    } else {
+      decisionControls = `
+        <div class="trade-action-btns">
+          <button class="btn-action-take" onclick="handleSignalDecision('${sig.id}', true)">✓ Took Trade</button>
+          <button class="btn-action-miss" onclick="handleSignalDecision('${sig.id}', false)">✕ Missed Signal</button>
+        </div>
+      `;
+    }
+
+    const journalButtonText = sig.journal ? '✓ Journaled' : '📝 Journal';
+    const journalBtnStyle = sig.journal 
+      ? 'background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981;' 
+      : 'background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid #3b82f6;';
+
     card.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 0.85rem;">
-        <div>
-          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <strong class="signal-pair-text" style="font-size: 1.05rem;">${sig.pair}</strong>
-            ${directionBadge}
-            <span style="font-size: 0.72rem; background: #1e293b; color: #94a3b8; padding: 0.15rem 0.45rem; border-radius: 3px; font-weight: 700;">TF: ${sig.timeframe || '5M'}</span>
+      <div style="display: flex; align-items: center; gap: 0.85rem; width: 100%;">
+        <div style="width: 100%;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <strong class="signal-pair-text" style="font-size: 1.05rem;">${sig.pair}</strong>
+              ${directionBadge}
+            </div>
             ${statusLabel}
           </div>
           <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem;">
-            Entry: <strong style="color: #fff;">${sig.entry_price}</strong> | Trade Duration: <strong style="color: #60a5fa;">4 Candlesticks (${sig.expiry} Min)</strong> | Conf: <strong>${sig.confidence}%</strong>
+            Entry: <strong style="color: #fff;">${sig.entry_price}</strong> | Duration: <strong style="color: #60a5fa;">4 Candles (${sig.expiry} Min)</strong> | Conf: <strong>${sig.confidence}%</strong>
           </div>
-          <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">
-            ${sig.strategy} • ${sig.timestamp}
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="font-size: 0.72rem; color: #64748b;">
+              ${sig.timestamp} (${ageMinutes}m ago)
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              ${decisionControls}
+              <button class="btn btn-sm" style="${journalBtnStyle} font-size: 0.72rem; padding: 0.25rem 0.55rem;" onclick="openJournalForSignal('${sig.id}')">
+                ${journalButtonText}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem;">
-        <button class="btn btn-sm" style="${journalBtnStyle} font-size: 0.75rem; padding: 0.3rem 0.6rem;" onclick="openJournalForSignal('${sig.id}')">
-          ${journalButtonText}
-        </button>
       </div>
     `;
 
     listEl.appendChild(card);
   });
+}
+
+// User action directly from Signal Box: "Took Trade" or "Missed Signal"
+function handleSignalDecision(signalId, tookTrade) {
+  const signal = signalsData.find(s => s.id === signalId);
+  if (!signal) return;
+
+  if (tookTrade) {
+    signal.decision = 'TOOK_TRADE';
+    showToast(`Recorded: Took trade on ${signal.pair} (${signal.direction})`, 'success');
+    // Prompt journal question to log outcome if trade finished or in progress
+    openJournalForSignal(signalId);
+  } else {
+    signal.decision = 'MISSED';
+    signal.journal = {
+      tookTrade: false,
+      won: null,
+      followedRules: null,
+      feedback: 'Missed signal.'
+    };
+    showToast(`Marked ${signal.pair} as Missed Signal (Gray in Journal)`, 'info');
+    renderSignals();
+    renderJournalTable();
+  }
 }
 
 // SIMULATE NEW EMA 15/50 CROSSOVER SIGNAL
@@ -376,8 +429,6 @@ function triggerSimulatedSignal() {
   const selectedPrice = prices[selectedPair];
   const confidence = Math.floor(88 + Math.random() * 8);
 
-  const strat = STRATEGIES[currentStrategy] || STRATEGIES['EMA_CROSS_15_50'];
-
   const newSignal = {
     id: 'sig_' + Math.floor(Math.random() * 10000),
     pair: selectedPair,
@@ -387,11 +438,13 @@ function triggerSimulatedSignal() {
     expiry: 15, // 4 candles on 5M = 15 minute duration
     entry_price: selectedPrice,
     confidence: confidence,
+    createdAt: Date.now(),
     timestamp: new Date().toLocaleTimeString(),
+    decision: null,
     journal: null
   };
 
-  // Add to front (becomes CURRENT in Blue, all others become Gray)
+  // Add to front (becomes CURRENT in Blue, all others become Gray / Running after 5 min)
   signalsData.unshift(newSignal);
   renderSignals();
   renderJournalTable();
@@ -410,11 +463,17 @@ function openJournalForSignal(signalId) {
 
   document.getElementById('modal-signal-info').innerText = `${signal.pair} ${signal.direction} [${signal.timeframe || '5M'}] @ ${signal.entry_price} (${signal.timestamp})`;
 
-  // Reset steps to Question 1
+  // If user already clicked "Took Trade" in signal box, pre-set Q1
   document.querySelectorAll('.journal-step').forEach(step => step.classList.remove('active'));
-  document.getElementById('journal-q1').classList.add('active');
-  document.getElementById('feedback-reason-input').value = '';
 
+  if (signal.decision === 'TOOK_TRADE') {
+    journalTempData.tookTrade = true;
+    document.getElementById('journal-q2').classList.add('active');
+  } else {
+    document.getElementById('journal-q1').classList.add('active');
+  }
+
+  document.getElementById('feedback-reason-input').value = '';
   openModal('journal-modal');
 }
 
@@ -423,13 +482,15 @@ function handleJournalQ1(tookTrade) {
   journalTempData.tookTrade = tookTrade;
 
   if (!tookTrade) {
+    if (currentJournalingSignal) currentJournalingSignal.decision = 'MISSED';
     finishJournalRecord({
       tookTrade: false,
       won: null,
       followedRules: null,
-      feedback: 'Trade was skipped.'
+      feedback: 'Trade was skipped / missed.'
     });
   } else {
+    if (currentJournalingSignal) currentJournalingSignal.decision = 'TOOK_TRADE';
     document.getElementById('journal-q1').classList.remove('active');
     document.getElementById('journal-q2').classList.add('active');
   }
@@ -490,7 +551,7 @@ function finishJournalRecord(journalData) {
     closeModal('journal-modal');
 
     if (!journalData.tookTrade) {
-      showToast('Trade recorded as Skipped (Marked Gray in Journal)', 'info');
+      showToast('Trade recorded as Missed (Marked Gray in Journal)', 'info');
     } else if (journalData.won || journalData.followedRules) {
       showToast('Trade recorded as Disciplined Execution (Marked Green in Journal)', 'success');
     } else {
@@ -522,9 +583,9 @@ function renderJournalTable() {
     if (sig.journal) {
       if (!sig.journal.tookTrade) {
         colorClass = 'status-gray';
-        tradeTakenCell = '<span class="journal-badge badge-skipped">No (Skipped)</span>';
-        outcomeCell = '<span style="color: #94a3b8;">N/A (Skipped)</span>';
-        feedbackCell = `<em>${sig.journal.feedback || 'Skipped'}</em>`;
+        tradeTakenCell = '<span class="journal-badge badge-skipped">No (Missed)</span>';
+        outcomeCell = '<span style="color: #94a3b8;">N/A (Missed)</span>';
+        feedbackCell = `<em>${sig.journal.feedback || 'Missed signal'}</em>`;
       } else if (sig.journal.won) {
         colorClass = 'status-green';
         tradeTakenCell = '<strong style="color: var(--call-green);">Yes</strong>';
@@ -616,4 +677,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load the single active EMA 15/50 crossover strategy
   document.getElementById('strategy-description').innerHTML = STRATEGIES['EMA_CROSS_15_50'].desc;
   updateChartRuntime();
+
+  // Check every 30 seconds to update signal status (Current -> Running after 5 min)
+  setInterval(() => {
+    renderSignals();
+  }, 30000);
 });

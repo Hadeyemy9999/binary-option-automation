@@ -408,6 +408,63 @@ header {
   white-space: nowrap;
 }
 
+/* RUNNING SIGNAL (AFTER 5 MINUTES) = ORANGE/AMBER */
+.signal-status-label.running {
+  background-color: #d97706 !important;
+  color: #fff !important;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  animation: pulseOrange 2s infinite;
+}
+
+@keyframes pulseOrange {
+  0% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(217, 119, 6, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
+}
+
+.trade-action-btns {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.btn-action-take {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid var(--call-green);
+  color: #a7f3d0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-action-take:hover {
+  background: var(--call-green);
+  color: #fff;
+}
+
+.btn-action-miss {
+  background: rgba(100, 116, 139, 0.2);
+  border: 1px solid var(--border-color);
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-action-miss:hover {
+  background: #334155;
+  color: #fff;
+}
+
 @keyframes pulseBlue {
   0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
   70% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
