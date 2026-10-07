@@ -77,23 +77,28 @@
               <button class="pair-tab" onclick="switchChartPair('ETH/USDT', 'BINANCE:ETHUSDT')">ETH/USDT</button>
             </div>
 
-            <!-- Timeframe Selector (5M Primary, 15M / 30M Secondary) -->
+            <!-- Timeframe Selector (1M Primary Entry, 5M, 15M) -->
             <div class="timeframe-selector">
-              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">TIMEFRAME:</span>
-              <button id="tf-5" class="tf-tab active" onclick="switchTimeframe('5')">5M (Primary)</button>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">ENTRY TIMEFRAME:</span>
+              <button id="tf-1" class="tf-tab active" onclick="switchTimeframe('1')">1M (Primary Entry)</button>
+              <button id="tf-5" class="tf-tab" onclick="switchTimeframe('5')">5M</button>
               <button id="tf-15" class="tf-tab" onclick="switchTimeframe('15')">15M</button>
-              <button id="tf-30" class="tf-tab" onclick="switchTimeframe('30')">30M</button>
             </div>
           </div>
 
-          <!-- TradingView Advanced Chart with Runtime Configured Indicators -->
-          <div class="chart-container" id="tradingview_chart_container">
-            <!-- Rendered by TradingView Widget Constructor -->
+          <!-- TradingView Advanced Chart with Dynamic Crossover Signal Marker Badge -->
+          <div class="chart-wrapper">
+            <div id="chart-signal-marker-badge" class="chart-signal-marker" style="display: none;">
+              <!-- Dynamic Marker Sign (BUY / SELL) -->
+            </div>
+            <div class="chart-container" id="tradingview_chart_container">
+              <!-- Rendered by TradingView Widget Constructor -->
+            </div>
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.65rem; font-size: 0.75rem; color: var(--text-muted); flex-wrap: wrap; gap: 0.5rem;">
-            <span>📈 <strong>Crossover Rule:</strong> 15 EMA (Yellow) crosses above 50 EMA (Blue) &rarr; <strong style="color:var(--call-green);">BUY</strong> | Crosses below &rarr; <strong style="color:var(--put-red);">SELL</strong></span>
-            <span>⏱️ <strong>Trade Duration:</strong> <strong style="color: #60a5fa;">4 Candlesticks (15 Minutes on 5M timeframe)</strong></span>
+            <span>📈 <strong>Crossover Rule:</strong> Only printed at the fresh crossover moment (15 EMA Yellow crosses 50 EMA Blue). No repeat signals while already crossed.</span>
+            <span>⏱️ <strong>Trade Duration:</strong> <strong style="color: #60a5fa;">15 Minutes</strong> (15 candlesticks on 1M chart)</span>
           </div>
         </section>
 
@@ -225,7 +230,7 @@
         <div class="question-box">
           <div class="question-text">3. Did you follow the trade through according to the signal parameters?</div>
           <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
-            (Correct 15-minute / 4 candlestick duration on 5M timeframe, prompt entry on crossover confirmation, no early close, proper risk)
+            (Correct 15-minute duration on 1M crossover entry, waited for 15 EMA cross over 50 EMA, no early panic close, proper money management)
           </p>
           <div class="question-options">
             <button class="btn btn-outline" style="flex: 1;" onclick="handleJournalQ3(false)">No (Deviated from Rules)</button>
@@ -241,7 +246,7 @@
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.75rem;">
             Please input your honest feedback on why you did not follow the signal rule:
           </p>
-          <textarea id="feedback-reason-input" class="form-textarea" placeholder="e.g. Took 5-minute expiry instead of the 15-minute (4 candlestick) duration; jumped before the 15 EMA crossover was fully closed..."></textarea>
+          <textarea id="feedback-reason-input" class="form-textarea" placeholder="e.g. Chased the move after the crossover already finished; selected 1-minute expiry instead of the full 15-minute duration..."></textarea>
           <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="submitFeedbackReason()">Save Journal Record</button>
         </div>
       </div>

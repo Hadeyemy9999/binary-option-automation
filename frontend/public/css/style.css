@@ -245,7 +245,12 @@ header {
   gap: 0.5rem;
 }
 
-/* Market Tracker Chart Area */
+/* Market Tracker Chart Area with Dynamic Signal Marker Badge */
+.chart-wrapper {
+  position: relative;
+  width: 100%;
+}
+
 .chart-container {
   height: 480px;
   border-radius: 0.5rem;
@@ -253,6 +258,54 @@ header {
   border: 1px solid var(--border-color);
   background-color: #0b0f19;
   width: 100%;
+  position: relative;
+}
+
+.chart-signal-marker {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.5rem;
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.chart-signal-marker.buy {
+  background: rgba(16, 185, 129, 0.9);
+  color: #fff;
+  border: 2px solid #10b981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+  animation: markerGlowGreen 2s infinite;
+}
+
+.chart-signal-marker.sell {
+  background: rgba(239, 68, 68, 0.9);
+  color: #fff;
+  border: 2px solid #ef4444;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+  animation: markerGlowRed 2s infinite;
+}
+
+@keyframes markerGlowGreen {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8); }
+  70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+@keyframes markerGlowRed {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
 .chart-pair-selector {
