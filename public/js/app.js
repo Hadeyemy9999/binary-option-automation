@@ -1,4 +1,4 @@
-// Coordinated Trading Terminal Logic, Runtime Indicator Engine, and Trade Journal System
+// Coordinated Trading Terminal Logic - EMA 15/50 Crossover Testing Strategy
 const API_BASE = window.location.origin.includes('5000') 
   ? window.location.origin + '/api/v1' 
   : (window.location.hostname === 'localhost' ? 'http://localhost:5000/api/v1' : '/api/v1');
@@ -10,134 +10,103 @@ let currentUser = JSON.parse(localStorage.getItem('user_profile') || 'null') || 
   tier: 'PRO'
 };
 
-let currentStrategy = 'RSI_BB';
+let currentStrategy = 'EMA_CROSS_15_50';
 let activePair = 'EUR/USD';
 let activeSymbol = 'FX:EURUSD';
-let activeTimeframe = '15'; // 15M (Primary) or 30M (Macro)
+let activeTimeframe = '5'; // 5M Primary Timeframe
 
-// Strategy Definitions with Technical Indicators Configured for TradingView Runtime
+// The Single Active Strategy Specification
 const STRATEGIES = {
-  RSI_BB: {
-    name: 'Strategy 1: RSI Extremes (14) + Bollinger Bands Rejection',
-    badge: 'Indicators: RSI + BB',
-    timeframe: 'M15/M30',
-    minDuration: 10,
+  EMA_CROSS_15_50: {
+    name: '15 EMA (Yellow) × 50 EMA (Blue) Crossover Strategy',
+    badge: 'EMA 15 (Yellow) + EMA 50 (Blue)',
+    timeframe: '5M',
+    candlesDuration: 4, // 4 candlesticks
+    minDuration: 15,    // 15 Minutes trade duration on 5M timeframe
     studies: [
-      'RSI@tv-basicstudies',
-      'BB@tv-basicstudies'
+      'MAExp@tv-basicstudies',
+      'MASimple@tv-basicstudies'
     ],
-    desc: '• <strong>Timeframe Filter</strong>: 15-Minute or 30-Minute candle close only.<br>' +
-          '• <strong>Indicators Configured</strong>: Relative Strength Index (RSI 14) + Bollinger Bands (20, 2).<br>' +
-          '• <strong>Rules</strong>: Rejection wick at outer Bollinger Band with RSI &lt; 25 (CALL) or RSI &gt; 75 (PUT).<br>' +
-          '• <strong>Trade Duration</strong>: Minimum 10 to 15 Minutes.'
-  },
-  EMA_TREND: {
-    name: 'Strategy 2: Triple EMA Trend Flow (EMA 9, 21, 50 Pullback)',
-    badge: 'Indicators: EMA 9/21/50',
-    timeframe: 'M15/M30',
-    minDuration: 12,
-    studies: [
-      'MASimple@tv-basicstudies',
-      'MAExp@tv-basicstudies'
-    ],
-    desc: '• <strong>Timeframe Filter</strong>: 15-Minute trend alignment with 30-Minute bias.<br>' +
-          '• <strong>Indicators Configured</strong>: Exponential Moving Averages (EMA 9, 21, 50).<br>' +
-          '• <strong>Rules</strong>: Direction aligned with EMA 50 slope; entry on rejection touch of EMA 9 or 21.<br>' +
-          '• <strong>Trade Duration</strong>: Minimum 10 to 15 Minutes.'
-  },
-  MACD_MOMENTUM: {
-    name: 'Strategy 3: MACD Histogram Divergence + Volume Wave',
-    badge: 'Indicators: MACD + Volume',
-    timeframe: 'M15/M30',
-    minDuration: 15,
-    studies: [
-      'MACD@tv-basicstudies',
-      'Volume@tv-basicstudies'
-    ],
-    desc: '• <strong>Timeframe Filter</strong>: 15-Minute / 30-Minute structure confirmation.<br>' +
-          '• <strong>Indicators Configured</strong>: MACD (12, 26, 9) + Volume Profile.<br>' +
-          '• <strong>Rules</strong>: MACD histogram divergence against price swing highs/lows with declining seller/buyer volume.<br>' +
-          '• <strong>Trade Duration</strong>: Minimum 15 Minutes.'
-  },
-  SUPER_TREND: {
-    name: 'Strategy 4: SuperTrend Volatility Breakout & Cloud',
-    badge: 'Indicators: SuperTrend + ATR',
-    timeframe: 'M15/M30',
-    minDuration: 10,
-    studies: [
-      'ATR@tv-basicstudies',
-      'BB@tv-basicstudies'
-    ],
-    desc: '• <strong>Timeframe Filter</strong>: 15-Minute & 30-Minute volatility zones.<br>' +
-          '• <strong>Indicators Configured</strong>: Average True Range (ATR 14) + Volatility Bands.<br>' +
-          '• <strong>Rules</strong>: High-probability continuation after candle close outside key volatility band.<br>' +
-          '• <strong>Trade Duration</strong>: Minimum 10 to 15 Minutes.'
+    // Overrides: EMA 15 in Yellow (#facc15), EMA 50 in Blue (#2563eb)
+    studiesOverrides: {
+      "moving average exponential.length": 15,
+      "moving average exponential.plot.color": "#facc15",
+      "moving average exponential.plot.linewidth": 2,
+      "moving average.length": 50,
+      "moving average.plot.color": "#2563eb",
+      "moving average.plot.linewidth": 3
+    },
+    desc: '• <strong>Indicator 1</strong>: <span style="color:#60a5fa; font-weight:700;">EMA 50 (Close) - Colour: BLUE</span><br>' +
+          '• <strong>Indicator 2</strong>: <span style="color:#facc15; font-weight:700;">EMA 15 (Close) - Colour: YELLOW</span><br>' +
+          '• <strong>BUY Entry</strong>: 15 EMA (Yellow) crosses <strong style="color:var(--call-green);">ABOVE</strong> 50 EMA (Blue).<br>' +
+          '• <strong>SELL Entry</strong>: 15 EMA (Yellow) crosses <strong style="color:var(--put-red);">BELOW</strong> 50 EMA (Blue).<br>' +
+          '• <strong>Trade Duration</strong>: <strong style="color:#fff;">4 Candlesticks (15-Minute Duration on 5M timeframe)</strong>.'
   }
 };
 
-// Initial High-Quality Signals (Strictly M15 and M30, Minimum 10-15 Min Expiry)
+// Initial High-Probability Signals for EMA 15/50 Crossover (4 Candlesticks / 15-Minute Expiry)
 let signalsData = [
   {
     id: 'sig_101',
     pair: 'EUR/USD',
-    direction: 'CALL',
-    strategy: 'Strategy 1: RSI Extremes (14) + Bollinger Bands Rejection',
-    timeframe: '15M',
-    expiry: 15, // 15 Min duration
+    direction: 'BUY',
+    strategy: '15 EMA (Yellow) × 50 EMA (Blue) Crossover',
+    timeframe: '5M',
+    expiry: 15, // 15 Min duration (4 candles)
     entry_price: 1.08542,
-    confidence: 91,
+    confidence: 92,
     timestamp: new Date().toLocaleTimeString(),
     journal: null
   },
   {
     id: 'sig_102',
     pair: 'GBP/USD',
-    direction: 'PUT',
-    strategy: 'Strategy 1: RSI Extremes (14) + Bollinger Bands Rejection',
-    timeframe: '15M',
+    direction: 'SELL',
+    strategy: '15 EMA (Yellow) × 50 EMA (Blue) Crossover',
+    timeframe: '5M',
     expiry: 15,
     entry_price: 1.29815,
-    confidence: 86,
-    timestamp: new Date(Date.now() - 18 * 60000).toLocaleTimeString(),
+    confidence: 88,
+    timestamp: new Date(Date.now() - 15 * 60000).toLocaleTimeString(),
     journal: {
       tookTrade: true,
       won: true,
       followedRules: true,
-      feedback: 'Waited for 15M candle to close above Bollinger Band, entered 15M trade, clean ITM win.'
+      feedback: 'Waited for 15 EMA to close below 50 EMA on 5M candle; entered 15-minute trade (4 candles), clean win.'
     }
   },
   {
     id: 'sig_103',
     pair: 'USD/JPY',
-    direction: 'CALL',
-    strategy: 'Strategy 2: Triple EMA Trend Flow (EMA 9, 21, 50 Pullback)',
-    timeframe: '30M',
+    direction: 'BUY',
+    strategy: '15 EMA (Yellow) × 50 EMA (Blue) Crossover',
+    timeframe: '5M',
     expiry: 15,
     entry_price: 151.420,
-    confidence: 88,
-    timestamp: new Date(Date.now() - 35 * 60000).toLocaleTimeString(),
+    confidence: 84,
+    timestamp: new Date(Date.now() - 30 * 60000).toLocaleTimeString(),
     journal: {
       tookTrade: false,
       won: null,
       followedRules: null,
-      feedback: 'Skipped trade due to upcoming high-impact news announcement.'
+      feedback: 'Skipped trade: missed the initial crossover bar.'
     }
   },
   {
     id: 'sig_104',
     pair: 'BTC/USDT',
-    direction: 'PUT',
-    strategy: 'Strategy 3: MACD Histogram Divergence + Volume Wave',
-    timeframe: '15M',
-    expiry: 10,
+    direction: 'SELL',
+    strategy: '15 EMA (Yellow) × 50 EMA (Blue) Crossover',
+    timeframe: '5M',
+    expiry: 15,
     entry_price: 64510.00,
-    confidence: 89,
-    timestamp: new Date(Date.now() - 52 * 60000).toLocaleTimeString(),
+    confidence: 90,
+    timestamp: new Date(Date.now() - 45 * 60000).toLocaleTimeString(),
     journal: {
       tookTrade: true,
       won: false,
       followedRules: false,
-      feedback: 'Failed discipline: entered 2 minutes before the 15M candle closed; got caught in spike.'
+      feedback: 'Failed rule: selected 5-minute expiry instead of the 4 candlesticks (15-minute) duration.'
     }
   }
 ];
@@ -146,7 +115,7 @@ let currentJournalingSignal = null;
 let journalTempData = {};
 
 // Synthesizer Audio Chime
-function playSignalChime(isCall = true) {
+function playSignalChime(isBuy = true) {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
@@ -155,8 +124,8 @@ function playSignalChime(isCall = true) {
     const gain = ctx.createGain();
 
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(isCall ? 587.33 : 440.00, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(isCall ? 880 : 330, ctx.currentTime + 0.35);
+    osc.frequency.setValueAtTime(isBuy ? 587.33 : 440.00, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(isBuy ? 880 : 330, ctx.currentTime + 0.35);
 
     gain.gain.setValueAtTime(0.2, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
@@ -207,10 +176,11 @@ function setupNavigation() {
   };
 }
 
-// RUNTIME ENGINE: Configures Chart with Selected Strategy Indicators
+// RUNTIME ENGINE: Configures Chart with EMA 15 (Yellow) and EMA 50 (Blue)
 function updateChartRuntime() {
-  const strat = STRATEGIES[currentStrategy] || STRATEGIES['RSI_BB'];
+  const strat = STRATEGIES[currentStrategy] || STRATEGIES['EMA_CROSS_15_50'];
   const studiesParam = encodeURIComponent(JSON.stringify(strat.studies));
+  const overridesParam = encodeURIComponent(JSON.stringify(strat.studiesOverrides || {}));
 
   const widgetUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_7918a` +
     `&symbol=${encodeURIComponent(activeSymbol)}` +
@@ -223,8 +193,7 @@ function updateChartRuntime() {
     `&theme=dark` +
     `&style=1` +
     `&timezone=Etc%2FUTC` +
-    `&studies_overrides=%7B%7D` +
-    `&overrides=%7B%7D` +
+    `&studies_overrides=${overridesParam}` +
     `&enabled_features=%5B%5D` +
     `&disabled_features=%5B%5D` +
     `&locale=en` +
@@ -237,7 +206,7 @@ function updateChartRuntime() {
 
   // Update badge UI
   const pairBadge = document.getElementById('active-pair-badge');
-  if (pairBadge) pairBadge.innerText = `${activePair} • M${activeTimeframe}`;
+  if (pairBadge) pairBadge.innerText = `${activePair} • ${activeTimeframe}M`;
 
   const indBadge = document.getElementById('active-indicators-badge');
   if (indBadge) indBadge.innerText = strat.badge;
@@ -250,7 +219,7 @@ function onStrategyChange(strategyKey) {
   if (strat) {
     document.getElementById('strategy-description').innerHTML = strat.desc;
     updateChartRuntime();
-    showToast(`Runtime Engine updated chart: ${strat.badge}`, 'success');
+    showToast(`Strategy Loaded: ${strat.name}`, 'success');
   }
 }
 
@@ -262,16 +231,17 @@ function switchChartPair(pairName, tvSymbol) {
     btn.classList.toggle('active', btn.innerText === pairName);
   });
   updateChartRuntime();
-  showToast(`Market Tracker loaded: ${pairName} (M${activeTimeframe})`, 'info');
+  showToast(`Market Tracker loaded: ${pairName} (${activeTimeframe}M)`, 'info');
 }
 
-// High-Timeframe Switcher (15M / 30M)
+// Timeframe Switcher (5M Primary, 15M, 30M)
 function switchTimeframe(tf) {
   activeTimeframe = tf;
+  document.getElementById('tf-5').classList.toggle('active', tf === '5');
   document.getElementById('tf-15').classList.toggle('active', tf === '15');
   document.getElementById('tf-30').classList.toggle('active', tf === '30');
   updateChartRuntime();
-  showToast(`Timeframe switched to ${tf}M candle view`, 'info');
+  showToast(`Timeframe set to ${tf}M candle chart`, 'info');
 }
 
 // RENDER SIGNALS IN SIGNAL BOX (First = Blue, Others = Gray)
@@ -282,30 +252,34 @@ function renderSignals() {
 
   signalsData.forEach((sig, index) => {
     const isCurrent = index === 0;
-    const isCall = sig.direction === 'CALL';
+    const isBuy = sig.direction === 'BUY' || sig.direction === 'CALL';
     const card = document.createElement('div');
     card.className = `signal-item ${isCurrent ? 'current' : 'historical'}`;
 
     const statusLabel = isCurrent 
       ? `<span class="signal-status-label">CURRENT ACTIVE</span>` 
-      : `<span class="signal-status-label">PAST ${sig.timeframe || '15M'}</span>`;
+      : `<span class="signal-status-label">PAST ${sig.timeframe || '5M'}</span>`;
 
     const journalButtonText = sig.journal ? '✓ Journaled' : '📝 Record in Journal';
     const journalBtnStyle = sig.journal 
       ? 'background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981;' 
       : 'background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid #3b82f6;';
 
+    const directionBadge = isBuy 
+      ? `<span class="badge-call">BUY (15 EMA &gt; 50 EMA)</span>` 
+      : `<span class="badge-put">SELL (15 EMA &lt; 50 EMA)</span>`;
+
     card.innerHTML = `
       <div style="display: flex; align-items: center; gap: 0.85rem;">
         <div>
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <strong class="signal-pair-text" style="font-size: 1.05rem;">${sig.pair}</strong>
-            <span class="${isCall ? 'badge-call' : 'badge-put'}">${sig.direction}</span>
-            <span style="font-size: 0.72rem; background: #1e293b; color: #94a3b8; padding: 0.15rem 0.45rem; border-radius: 3px; font-weight: 700;">TF: ${sig.timeframe || '15M'}</span>
+            ${directionBadge}
+            <span style="font-size: 0.72rem; background: #1e293b; color: #94a3b8; padding: 0.15rem 0.45rem; border-radius: 3px; font-weight: 700;">TF: ${sig.timeframe || '5M'}</span>
             ${statusLabel}
           </div>
           <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem;">
-            Entry: <strong style="color: #fff;">${sig.entry_price}</strong> | Trade Duration: <strong style="color: #60a5fa;">${sig.expiry} Min</strong> | Conf: <strong>${sig.confidence}%</strong>
+            Entry: <strong style="color: #fff;">${sig.entry_price}</strong> | Trade Duration: <strong style="color: #60a5fa;">4 Candlesticks (${sig.expiry} Min)</strong> | Conf: <strong>${sig.confidence}%</strong>
           </div>
           <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">
             ${sig.strategy} • ${sig.timestamp}
@@ -323,10 +297,10 @@ function renderSignals() {
   });
 }
 
-// SIMULATE NEW HIGH-TIMEFRAME QUALITY SIGNAL
+// SIMULATE NEW EMA 15/50 CROSSOVER SIGNAL
 function triggerSimulatedSignal() {
   const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'AUD/USD'];
-  const directions = ['CALL', 'PUT'];
+  const directions = ['BUY', 'SELL'];
   const prices = {
     'EUR/USD': (1.08500 + Math.random() * 0.002).toFixed(5),
     'GBP/USD': (1.29800 + Math.random() * 0.002).toFixed(5),
@@ -338,18 +312,17 @@ function triggerSimulatedSignal() {
   const selectedPair = pairs[Math.floor(Math.random() * pairs.length)];
   const selectedDirection = directions[Math.floor(Math.random() * directions.length)];
   const selectedPrice = prices[selectedPair];
-  const confidence = Math.floor(86 + Math.random() * 10); // High confidence
+  const confidence = Math.floor(88 + Math.random() * 8);
 
-  const strat = STRATEGIES[currentStrategy] || STRATEGIES['RSI_BB'];
-  const tradeDuration = strat.minDuration || 15; // Minimum 10 to 15 min duration
+  const strat = STRATEGIES[currentStrategy] || STRATEGIES['EMA_CROSS_15_50'];
 
   const newSignal = {
     id: 'sig_' + Math.floor(Math.random() * 10000),
     pair: selectedPair,
     direction: selectedDirection,
-    strategy: strat.name,
+    strategy: '15 EMA (Yellow) × 50 EMA (Blue) Crossover',
     timeframe: `${activeTimeframe}M`,
-    expiry: tradeDuration,
+    expiry: 15, // 4 candles on 5M = 15 minute duration
     entry_price: selectedPrice,
     confidence: confidence,
     timestamp: new Date().toLocaleTimeString(),
@@ -360,8 +333,10 @@ function triggerSimulatedSignal() {
   signalsData.unshift(newSignal);
   renderSignals();
   renderJournalTable();
-  playSignalChime(selectedDirection === 'CALL');
-  showToast(`🚨 High-Quality Signal: ${selectedPair} ${selectedDirection} (TF: ${activeTimeframe}M, Min Duration: ${tradeDuration}m)`, 'success');
+  playSignalChime(selectedDirection === 'BUY');
+
+  const crossDetail = selectedDirection === 'BUY' ? '15 EMA crossed ABOVE 50 EMA' : '15 EMA crossed BELOW 50 EMA';
+  showToast(`🚨 ${selectedPair} ${selectedDirection} Signal! (${crossDetail} • 15M Duration)`, 'success');
 }
 
 // TRADE JOURNAL QUESTION WORKFLOW
@@ -371,7 +346,7 @@ function openJournalForSignal(signalId) {
   currentJournalingSignal = signal;
   journalTempData = {};
 
-  document.getElementById('modal-signal-info').innerText = `${signal.pair} ${signal.direction} [${signal.timeframe || '15M'}] @ ${signal.entry_price} (${signal.timestamp})`;
+  document.getElementById('modal-signal-info').innerText = `${signal.pair} ${signal.direction} [${signal.timeframe || '5M'}] @ ${signal.entry_price} (${signal.timestamp})`;
 
   // Reset steps to Question 1
   document.querySelectorAll('.journal-step').forEach(step => step.classList.remove('active'));
@@ -407,7 +382,7 @@ function handleJournalQ2(won) {
       tookTrade: true,
       won: true,
       followedRules: true,
-      feedback: 'Trade won (ITM) on higher timeframe duration.'
+      feedback: 'Trade won (ITM) using 4 candlestick (15-minute) duration.'
     });
   } else {
     document.getElementById('journal-q2').classList.remove('active');
@@ -424,7 +399,7 @@ function handleJournalQ3(followedRules) {
       tookTrade: true,
       won: false,
       followedRules: true,
-      feedback: 'Disciplined execution: followed 15M/30M rule and min 10-15M duration strictly.'
+      feedback: 'Disciplined execution: followed 15 EMA / 50 EMA crossover and 4 candlestick (15-minute) duration strictly.'
     });
   } else {
     document.getElementById('journal-q3').classList.remove('active');
@@ -435,7 +410,7 @@ function handleJournalQ3(followedRules) {
 // Question 4: Save honest feedback input
 function submitFeedbackReason() {
   const reason = document.getElementById('feedback-reason-input').value.trim();
-  const feedback = reason || 'Trader did not adhere to minimum trade duration or higher timeframe rules.';
+  const feedback = reason || 'Trader did not adhere to the 4 candlestick (15-minute) duration or crossover rule.';
 
   finishJournalRecord({
     tookTrade: true,
@@ -477,6 +452,11 @@ function renderJournalTable() {
     let outcomeCell = '<span style="color: var(--text-muted);">-</span>';
     let feedbackCell = '<span style="color: var(--text-muted);">-</span>';
 
+    const isBuy = sig.direction === 'BUY' || sig.direction === 'CALL';
+    const directionBadge = isBuy 
+      ? `<span class="badge-call">BUY</span>` 
+      : `<span class="badge-put">SELL</span>`;
+
     if (sig.journal) {
       if (!sig.journal.tookTrade) {
         colorClass = 'status-gray';
@@ -505,8 +485,8 @@ function renderJournalTable() {
 
     row.innerHTML = `
       <td><strong>${sig.timestamp}</strong></td>
-      <td><strong>${sig.pair}</strong> <span class="${sig.direction === 'CALL' ? 'badge-call' : 'badge-put'}">${sig.direction}</span></td>
-      <td style="font-size: 0.8rem; color: #94a3b8;">[${sig.timeframe || '15M'}] ${sig.strategy}</td>
+      <td><strong>${sig.pair}</strong> ${directionBadge}</td>
+      <td style="font-size: 0.8rem; color: #94a3b8;">[${sig.timeframe || '5M'}] 15 EMA × 50 EMA Cross</td>
       <td>${sig.entry_price}</td>
       <td>${tradeTakenCell}</td>
       <td>${outcomeCell}</td>
@@ -560,7 +540,7 @@ function setupAuthHandlers() {
     localStorage.setItem('user_profile', JSON.stringify(currentUser));
     document.getElementById('nav-user-email').innerText = email;
     closeModal('auth-modal');
-    showToast(`Welcome ${email}! Entering institutional workspace.`, 'success');
+    showToast(`Welcome ${email}! Entering terminal workspace.`, 'success');
   };
 }
 
@@ -571,7 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSignals();
   renderJournalTable();
 
-  // Load initial Strategy 1 with configured indicators
-  document.getElementById('strategy-description').innerHTML = STRATEGIES['RSI_BB'].desc;
+  // Load the single active EMA 15/50 crossover strategy
+  document.getElementById('strategy-description').innerHTML = STRATEGIES['EMA_CROSS_15_50'].desc;
   updateChartRuntime();
 });
