@@ -1,4 +1,4 @@
-// Coordinated Trading Terminal Logic, Strategy Engine, and Trade Journal System
+// Coordinated Trading Terminal Logic, Runtime Indicator Engine, and Trade Journal System
 const API_BASE = window.location.origin.includes('5000') 
   ? window.location.origin + '/api/v1' 
   : (window.location.hostname === 'localhost' ? 'http://localhost:5000/api/v1' : '/api/v1');
@@ -12,91 +12,136 @@ let currentUser = JSON.parse(localStorage.getItem('user_profile') || 'null') || 
 
 let currentStrategy = 'RSI_BB';
 let activePair = 'EUR/USD';
+let activeSymbol = 'FX:EURUSD';
+let activeTimeframe = '15'; // 15M (Primary) or 30M (Macro)
 
-// Strategy Catalog Definitions
+// Strategy Definitions with Technical Indicators Configured for TradingView Runtime
 const STRATEGIES = {
   RSI_BB: {
-    name: 'Strategy A: RSI Extremes + Bollinger Bands (M5)',
-    desc: '• <strong>Conditions</strong>: RSI < 25 (CALL) or RSI > 75 (PUT) at outer band touch.<br>• <strong>Filter</strong>: Automated high-impact news suppression enabled.'
+    name: 'Strategy 1: RSI Extremes (14) + Bollinger Bands Rejection',
+    badge: 'Indicators: RSI + BB',
+    timeframe: 'M15/M30',
+    minDuration: 10,
+    studies: [
+      'RSI@tv-basicstudies',
+      'BB@tv-basicstudies'
+    ],
+    desc: '• <strong>Timeframe Filter</strong>: 15-Minute or 30-Minute candle close only.<br>' +
+          '• <strong>Indicators Configured</strong>: Relative Strength Index (RSI 14) + Bollinger Bands (20, 2).<br>' +
+          '• <strong>Rules</strong>: Rejection wick at outer Bollinger Band with RSI &lt; 25 (CALL) or RSI &gt; 75 (PUT).<br>' +
+          '• <strong>Trade Duration</strong>: Minimum 10 to 15 Minutes.'
   },
   EMA_TREND: {
-    name: 'Strategy B: EMA 9/21 Dynamic Trend Pullback (M5)',
-    desc: '• <strong>Conditions</strong>: Trend established on EMA 50; pullback touch of EMA 9 with rejection candle.<br>• <strong>Filter</strong>: Minimum 2-candle momentum confirmation.'
+    name: 'Strategy 2: Triple EMA Trend Flow (EMA 9, 21, 50 Pullback)',
+    badge: 'Indicators: EMA 9/21/50',
+    timeframe: 'M15/M30',
+    minDuration: 12,
+    studies: [
+      'MASimple@tv-basicstudies',
+      'MAExp@tv-basicstudies'
+    ],
+    desc: '• <strong>Timeframe Filter</strong>: 15-Minute trend alignment with 30-Minute bias.<br>' +
+          '• <strong>Indicators Configured</strong>: Exponential Moving Averages (EMA 9, 21, 50).<br>' +
+          '• <strong>Rules</strong>: Direction aligned with EMA 50 slope; entry on rejection touch of EMA 9 or 21.<br>' +
+          '• <strong>Trade Duration</strong>: Minimum 10 to 15 Minutes.'
   },
-  STOCH_DIVERGENCE: {
-    name: 'Strategy C: Stochastic Momentum Divergence (M5)',
-    desc: '• <strong>Conditions</strong>: Price makes higher high / lower low while Stochastic oscillator makes opposite movement.<br>• <strong>Filter</strong>: Overbought/oversold crossover confirmation.'
+  MACD_MOMENTUM: {
+    name: 'Strategy 3: MACD Histogram Divergence + Volume Wave',
+    badge: 'Indicators: MACD + Volume',
+    timeframe: 'M15/M30',
+    minDuration: 15,
+    studies: [
+      'MACD@tv-basicstudies',
+      'Volume@tv-basicstudies'
+    ],
+    desc: '• <strong>Timeframe Filter</strong>: 15-Minute / 30-Minute structure confirmation.<br>' +
+          '• <strong>Indicators Configured</strong>: MACD (12, 26, 9) + Volume Profile.<br>' +
+          '• <strong>Rules</strong>: MACD histogram divergence against price swing highs/lows with declining seller/buyer volume.<br>' +
+          '• <strong>Trade Duration</strong>: Minimum 15 Minutes.'
   },
-  INSTITUTIONAL_SR: {
-    name: 'Strategy D: Institutional Key Level S/R (M5)',
-    desc: '• <strong>Conditions</strong>: Rejection wick at 4H horizontal support/resistance or round numbers (.000, .500).<br>• <strong>Filter</strong>: Minimum 3 touches on historical timeframe.'
+  SUPER_TREND: {
+    name: 'Strategy 4: SuperTrend Volatility Breakout & Cloud',
+    badge: 'Indicators: SuperTrend + ATR',
+    timeframe: 'M15/M30',
+    minDuration: 10,
+    studies: [
+      'ATR@tv-basicstudies',
+      'BB@tv-basicstudies'
+    ],
+    desc: '• <strong>Timeframe Filter</strong>: 15-Minute & 30-Minute volatility zones.<br>' +
+          '• <strong>Indicators Configured</strong>: Average True Range (ATR 14) + Volatility Bands.<br>' +
+          '• <strong>Rules</strong>: High-probability continuation after candle close outside key volatility band.<br>' +
+          '• <strong>Trade Duration</strong>: Minimum 10 to 15 Minutes.'
   }
 };
 
-// Signals State (Current is [0], older are [1..n])
+// Initial High-Quality Signals (Strictly M15 and M30, Minimum 10-15 Min Expiry)
 let signalsData = [
   {
     id: 'sig_101',
     pair: 'EUR/USD',
     direction: 'CALL',
-    strategy: 'Strategy A: RSI Extremes + Bollinger Bands (M5)',
-    expiry: 5,
+    strategy: 'Strategy 1: RSI Extremes (14) + Bollinger Bands Rejection',
+    timeframe: '15M',
+    expiry: 15, // 15 Min duration
     entry_price: 1.08542,
-    confidence: 89,
+    confidence: 91,
     timestamp: new Date().toLocaleTimeString(),
-    journal: null // not recorded yet
+    journal: null
   },
   {
     id: 'sig_102',
     pair: 'GBP/USD',
     direction: 'PUT',
-    strategy: 'Strategy A: RSI Extremes + Bollinger Bands (M5)',
-    expiry: 5,
+    strategy: 'Strategy 1: RSI Extremes (14) + Bollinger Bands Rejection',
+    timeframe: '15M',
+    expiry: 15,
     entry_price: 1.29815,
-    confidence: 84,
-    timestamp: new Date(Date.now() - 6 * 60000).toLocaleTimeString(),
+    confidence: 86,
+    timestamp: new Date(Date.now() - 18 * 60000).toLocaleTimeString(),
     journal: {
       tookTrade: true,
       won: true,
       followedRules: true,
-      feedback: 'Entered smoothly at candle open, solid ITM win.'
+      feedback: 'Waited for 15M candle to close above Bollinger Band, entered 15M trade, clean ITM win.'
     }
   },
   {
     id: 'sig_103',
     pair: 'USD/JPY',
     direction: 'CALL',
-    strategy: 'Strategy B: EMA 9/21 Dynamic Trend Pullback (M5)',
-    expiry: 5,
+    strategy: 'Strategy 2: Triple EMA Trend Flow (EMA 9, 21, 50 Pullback)',
+    timeframe: '30M',
+    expiry: 15,
     entry_price: 151.420,
-    confidence: 81,
-    timestamp: new Date(Date.now() - 15 * 60000).toLocaleTimeString(),
+    confidence: 88,
+    timestamp: new Date(Date.now() - 35 * 60000).toLocaleTimeString(),
     journal: {
       tookTrade: false,
       won: null,
       followedRules: null,
-      feedback: 'Was away from screen when alert sounded.'
+      feedback: 'Skipped trade due to upcoming high-impact news announcement.'
     }
   },
   {
     id: 'sig_104',
     pair: 'BTC/USDT',
     direction: 'PUT',
-    strategy: 'Strategy A: RSI Extremes + Bollinger Bands (M5)',
-    expiry: 5,
+    strategy: 'Strategy 3: MACD Histogram Divergence + Volume Wave',
+    timeframe: '15M',
+    expiry: 10,
     entry_price: 64510.00,
-    confidence: 88,
-    timestamp: new Date(Date.now() - 25 * 60000).toLocaleTimeString(),
+    confidence: 89,
+    timestamp: new Date(Date.now() - 52 * 60000).toLocaleTimeString(),
     journal: {
       tookTrade: true,
       won: false,
       followedRules: false,
-      feedback: 'Entered 45 seconds late after price dropped 30 pips; chased the trade.'
+      feedback: 'Failed discipline: entered 2 minutes before the 15M candle closed; got caught in spike.'
     }
   }
 ];
 
-// Active Journaling Workflow State
 let currentJournalingSignal = null;
 let journalTempData = {};
 
@@ -162,27 +207,71 @@ function setupNavigation() {
   };
 }
 
-// Strategy Selector
+// RUNTIME ENGINE: Configures Chart with Selected Strategy Indicators
+function updateChartRuntime() {
+  const strat = STRATEGIES[currentStrategy] || STRATEGIES['RSI_BB'];
+  const studiesParam = encodeURIComponent(JSON.stringify(strat.studies));
+
+  const widgetUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_7918a` +
+    `&symbol=${encodeURIComponent(activeSymbol)}` +
+    `&interval=${activeTimeframe}` +
+    `&hidesidetoolbar=1` +
+    `&symboledit=1` +
+    `&saveimage=0` +
+    `&toolbarbg=f1f3f6` +
+    `&studies=${studiesParam}` +
+    `&theme=dark` +
+    `&style=1` +
+    `&timezone=Etc%2FUTC` +
+    `&studies_overrides=%7B%7D` +
+    `&overrides=%7B%7D` +
+    `&enabled_features=%5B%5D` +
+    `&disabled_features=%5B%5D` +
+    `&locale=en` +
+    `&utm_source=localhost`;
+
+  const chartIframe = document.getElementById('tradingview-widget');
+  if (chartIframe) {
+    chartIframe.src = widgetUrl;
+  }
+
+  // Update badge UI
+  const pairBadge = document.getElementById('active-pair-badge');
+  if (pairBadge) pairBadge.innerText = `${activePair} • M${activeTimeframe}`;
+
+  const indBadge = document.getElementById('active-indicators-badge');
+  if (indBadge) indBadge.innerText = strat.badge;
+}
+
+// Strategy Selector Callback
 function onStrategyChange(strategyKey) {
   currentStrategy = strategyKey;
   const strat = STRATEGIES[strategyKey];
   if (strat) {
     document.getElementById('strategy-description').innerHTML = strat.desc;
-    showToast(`Active Strategy updated: ${strat.name}`, 'info');
+    updateChartRuntime();
+    showToast(`Runtime Engine updated chart: ${strat.badge}`, 'success');
   }
 }
 
-// Market Tracker Chart Switcher
+// Currency Pair Switcher
 function switchChartPair(pairName, tvSymbol) {
   activePair = pairName;
+  activeSymbol = tvSymbol;
   document.querySelectorAll('.pair-tab').forEach(btn => {
     btn.classList.toggle('active', btn.innerText === pairName);
   });
-  document.getElementById('active-pair-badge').innerText = `${pairName} • M5`;
+  updateChartRuntime();
+  showToast(`Market Tracker loaded: ${pairName} (M${activeTimeframe})`, 'info');
+}
 
-  const widgetUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_7918a&symbol=${encodeURIComponent(tvSymbol)}&interval=5&hidesidetoolbar=1&symboledit=1&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=localhost`;
-  document.getElementById('tradingview-widget').src = widgetUrl;
-  showToast(`Market Tracker loaded: ${pairName}`, 'info');
+// High-Timeframe Switcher (15M / 30M)
+function switchTimeframe(tf) {
+  activeTimeframe = tf;
+  document.getElementById('tf-15').classList.toggle('active', tf === '15');
+  document.getElementById('tf-30').classList.toggle('active', tf === '30');
+  updateChartRuntime();
+  showToast(`Timeframe switched to ${tf}M candle view`, 'info');
 }
 
 // RENDER SIGNALS IN SIGNAL BOX (First = Blue, Others = Gray)
@@ -199,7 +288,7 @@ function renderSignals() {
 
     const statusLabel = isCurrent 
       ? `<span class="signal-status-label">CURRENT ACTIVE</span>` 
-      : `<span class="signal-status-label">PAST M5</span>`;
+      : `<span class="signal-status-label">PAST ${sig.timeframe || '15M'}</span>`;
 
     const journalButtonText = sig.journal ? '✓ Journaled' : '📝 Record in Journal';
     const journalBtnStyle = sig.journal 
@@ -209,13 +298,14 @@ function renderSignals() {
     card.innerHTML = `
       <div style="display: flex; align-items: center; gap: 0.85rem;">
         <div>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <strong class="signal-pair-text" style="font-size: 1.05rem;">${sig.pair}</strong>
             <span class="${isCall ? 'badge-call' : 'badge-put'}">${sig.direction}</span>
+            <span style="font-size: 0.72rem; background: #1e293b; color: #94a3b8; padding: 0.15rem 0.45rem; border-radius: 3px; font-weight: 700;">TF: ${sig.timeframe || '15M'}</span>
             ${statusLabel}
           </div>
           <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem;">
-            Entry: <strong style="color: #fff;">${sig.entry_price}</strong> | Expiry: <strong>${sig.expiry}M</strong> | Conf: <strong>${sig.confidence}%</strong>
+            Entry: <strong style="color: #fff;">${sig.entry_price}</strong> | Trade Duration: <strong style="color: #60a5fa;">${sig.expiry} Min</strong> | Conf: <strong>${sig.confidence}%</strong>
           </div>
           <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">
             ${sig.strategy} • ${sig.timestamp}
@@ -233,7 +323,7 @@ function renderSignals() {
   });
 }
 
-// SIMULATE NEW SIGNAL PRINT (Pushes new signal to top in Blue, old ones turn Gray)
+// SIMULATE NEW HIGH-TIMEFRAME QUALITY SIGNAL
 function triggerSimulatedSignal() {
   const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'AUD/USD'];
   const directions = ['CALL', 'PUT'];
@@ -248,16 +338,18 @@ function triggerSimulatedSignal() {
   const selectedPair = pairs[Math.floor(Math.random() * pairs.length)];
   const selectedDirection = directions[Math.floor(Math.random() * directions.length)];
   const selectedPrice = prices[selectedPair];
-  const confidence = Math.floor(82 + Math.random() * 12);
+  const confidence = Math.floor(86 + Math.random() * 10); // High confidence
 
-  const stratName = STRATEGIES[currentStrategy] ? STRATEGIES[currentStrategy].name : 'Active Strategy';
+  const strat = STRATEGIES[currentStrategy] || STRATEGIES['RSI_BB'];
+  const tradeDuration = strat.minDuration || 15; // Minimum 10 to 15 min duration
 
   const newSignal = {
     id: 'sig_' + Math.floor(Math.random() * 10000),
     pair: selectedPair,
     direction: selectedDirection,
-    strategy: stratName,
-    expiry: 5,
+    strategy: strat.name,
+    timeframe: `${activeTimeframe}M`,
+    expiry: tradeDuration,
     entry_price: selectedPrice,
     confidence: confidence,
     timestamp: new Date().toLocaleTimeString(),
@@ -269,7 +361,7 @@ function triggerSimulatedSignal() {
   renderSignals();
   renderJournalTable();
   playSignalChime(selectedDirection === 'CALL');
-  showToast(`🚨 New Signal Printed: ${selectedPair} ${selectedDirection} (Current: Blue)`, 'success');
+  showToast(`🚨 High-Quality Signal: ${selectedPair} ${selectedDirection} (TF: ${activeTimeframe}M, Min Duration: ${tradeDuration}m)`, 'success');
 }
 
 // TRADE JOURNAL QUESTION WORKFLOW
@@ -279,7 +371,7 @@ function openJournalForSignal(signalId) {
   currentJournalingSignal = signal;
   journalTempData = {};
 
-  document.getElementById('modal-signal-info').innerText = `${signal.pair} ${signal.direction} @ ${signal.entry_price} (${signal.timestamp})`;
+  document.getElementById('modal-signal-info').innerText = `${signal.pair} ${signal.direction} [${signal.timeframe || '15M'}] @ ${signal.entry_price} (${signal.timestamp})`;
 
   // Reset steps to Question 1
   document.querySelectorAll('.journal-step').forEach(step => step.classList.remove('active'));
@@ -294,7 +386,6 @@ function handleJournalQ1(tookTrade) {
   journalTempData.tookTrade = tookTrade;
 
   if (!tookTrade) {
-    // If NO: turns to GRAY color on journal page
     finishJournalRecord({
       tookTrade: false,
       won: null,
@@ -302,7 +393,6 @@ function handleJournalQ1(tookTrade) {
       feedback: 'Trade was skipped.'
     });
   } else {
-    // If YES: proceed to Question 2 (Did the trade win?)
     document.getElementById('journal-q1').classList.remove('active');
     document.getElementById('journal-q2').classList.add('active');
   }
@@ -313,15 +403,13 @@ function handleJournalQ2(won) {
   journalTempData.won = won;
 
   if (won) {
-    // If YES: turns to GREEN
     finishJournalRecord({
       tookTrade: true,
       won: true,
       followedRules: true,
-      feedback: 'Trade won (ITM) with positive outcome.'
+      feedback: 'Trade won (ITM) on higher timeframe duration.'
     });
   } else {
-    // If NO: proceed to Question 3 (Did you follow according to signal parameters?)
     document.getElementById('journal-q2').classList.remove('active');
     document.getElementById('journal-q3').classList.add('active');
   }
@@ -332,15 +420,13 @@ function handleJournalQ3(followedRules) {
   journalTempData.followedRules = followedRules;
 
   if (followedRules) {
-    // If YES (loss, but followed rules 100%): leave it at GREEN (Disciplined execution)
     finishJournalRecord({
       tookTrade: true,
       won: false,
       followedRules: true,
-      feedback: 'Disciplined execution: followed all signal parameters strictly.'
+      feedback: 'Disciplined execution: followed 15M/30M rule and min 10-15M duration strictly.'
     });
   } else {
-    // If NO: proceed to Question 4 (Input honest feedback -> turns to YELLOW)
     document.getElementById('journal-q3').classList.remove('active');
     document.getElementById('journal-q4').classList.add('active');
   }
@@ -349,9 +435,8 @@ function handleJournalQ3(followedRules) {
 // Question 4: Save honest feedback input
 function submitFeedbackReason() {
   const reason = document.getElementById('feedback-reason-input').value.trim();
-  const feedback = reason || 'Trader did not adhere to standard signal rules or parameters.';
+  const feedback = reason || 'Trader did not adhere to minimum trade duration or higher timeframe rules.';
 
-  // If NO: turn to YELLOW with honest feedback box
   finishJournalRecord({
     tookTrade: true,
     won: false,
@@ -394,25 +479,21 @@ function renderJournalTable() {
 
     if (sig.journal) {
       if (!sig.journal.tookTrade) {
-        // Did you take trade? NO -> GRAY COLOR
         colorClass = 'status-gray';
         tradeTakenCell = '<span class="journal-badge badge-skipped">No (Skipped)</span>';
         outcomeCell = '<span style="color: #94a3b8;">N/A (Skipped)</span>';
         feedbackCell = `<em>${sig.journal.feedback || 'Skipped'}</em>`;
       } else if (sig.journal.won) {
-        // Trade won? YES -> GREEN COLOR
         colorClass = 'status-green';
         tradeTakenCell = '<strong style="color: var(--call-green);">Yes</strong>';
         outcomeCell = '<span class="journal-badge badge-disciplined-win">Won (ITM) • Green</span>';
         feedbackCell = `<span style="color: #a7f3d0;">${sig.journal.feedback}</span>`;
       } else if (sig.journal.followedRules) {
-        // Trade lost, but followed rules? YES -> GREEN COLOR
         colorClass = 'status-green';
         tradeTakenCell = '<strong style="color: var(--call-green);">Yes</strong>';
         outcomeCell = '<span class="journal-badge badge-disciplined-loss">Disciplined Loss • Green</span>';
         feedbackCell = `<span style="color: #a7f3d0;">Followed rules 100%</span>`;
       } else {
-        // Trade lost AND did not follow rules? NO -> YELLOW COLOR with honest feedback
         colorClass = 'status-yellow';
         tradeTakenCell = '<strong style="color: var(--accent-gold);">Yes</strong>';
         outcomeCell = '<span class="journal-badge badge-deviated">Rule Deviation • Yellow</span>';
@@ -425,7 +506,7 @@ function renderJournalTable() {
     row.innerHTML = `
       <td><strong>${sig.timestamp}</strong></td>
       <td><strong>${sig.pair}</strong> <span class="${sig.direction === 'CALL' ? 'badge-call' : 'badge-put'}">${sig.direction}</span></td>
-      <td style="font-size: 0.8rem; color: #94a3b8;">${sig.strategy}</td>
+      <td style="font-size: 0.8rem; color: #94a3b8;">[${sig.timeframe || '15M'}] ${sig.strategy}</td>
       <td>${sig.entry_price}</td>
       <td>${tradeTakenCell}</td>
       <td>${outcomeCell}</td>
@@ -479,7 +560,7 @@ function setupAuthHandlers() {
     localStorage.setItem('user_profile', JSON.stringify(currentUser));
     document.getElementById('nav-user-email').innerText = email;
     closeModal('auth-modal');
-    showToast(`Welcome ${email}! Entering terminal workspace.`, 'success');
+    showToast(`Welcome ${email}! Entering institutional workspace.`, 'success');
   };
 }
 
@@ -490,6 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSignals();
   renderJournalTable();
 
-  // Strategy default description
+  // Load initial Strategy 1 with configured indicators
   document.getElementById('strategy-description').innerHTML = STRATEGIES['RSI_BB'].desc;
+  updateChartRuntime();
 });
